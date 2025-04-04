@@ -1,261 +1,135 @@
-"use client"
+"use client";
 
-import type React from "react"
+import React, { useState } from "react";
+import axios from "axios";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { ImageIcon, UploadCloud } from "lucide-react";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { CalendarIcon, ImageIcon, UploadCloud } from "lucide-react"
+interface SubmissionResult {
+  id?: string;
+  url?: string;
+  error?: string;
+}
 
-import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
+const ImageUploadAndBannerSubmission = () => {
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState("ACTIVE");
+  const [submissionResult, setSubmissionResult] =
+    useState<SubmissionResult | null>(null);
 
-const formSchema = z.object({
-  title: z.string().min(2, {
-    message: "Title must be at least 2 characters.",
-  }),
-  description: z.string().optional(),
-  position: z.string({
-    required_error: "Please select a position.",
-  }),
-  url: z.string().url({
-    message: "Please enter a valid URL.",
-  }),
-  startDate: z.date({
-    required_error: "Start date is required.",
-  }),
-  endDate: z.date({
-    required_error: "End date is required.",
-  }),
-  isActive: z.boolean().default(false),
-})
+  // Function to convert file to base64
+  const convertToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const fileReader = new FileReader();
+      fileReader.readAsDataURL(file);
 
-export default function NewBannerPage() {
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const router = useRouter()
-  const { toast } = useToast()
+      fileReader.onload = () => {
+        if (typeof fileReader.result === "string") {
+          // We need to remove the prefix from the base64 string
+          // e.g., "data:image/jpeg;base64," is removed
+          const base64String = fileReader.result.split(",")[1];
+          resolve(base64String);
+        } else {
+          reject(new Error("Failed to convert to base64"));
+        }
+      };
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      position: "",
-      url: "",
-      isActive: false,
-    },
-  })
+      fileReader.onerror = (error) => {
+        reject(error);
+      };
+    });
+  };
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // In a real app, you would call your API to create the banner
-    console.log(values)
+  // Function to get image type from file
+  const getImageType = (file: File): string => {
+    return file.type.split("/")[1]; // e.g., "image/jpeg" -> "jpeg"
+  };
 
-    toast({
-      title: "Banner created",
-      description: "Your banner has been created successfully.",
-    })
-
-    router.push("/dashboard/banners")
-  }
-
+  // Handle image file selection (just for preview)
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Store the file for later upload
+    setImageFile(file);
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        setImagePreview(reader.result);
       }
-      reader.readAsDataURL(file)
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle the full submission process
+  const handleSubmit = async () => {
+    if (!imageFile) {
+      alert("Please select an image first");
+      return;
     }
-  }
+
+    try {
+      setIsSubmitting(true);
+      setSubmissionResult(null);
+
+      // Step 1: Convert image to base64
+      const base64Image = await convertToBase64(imageFile);
+      const imageType = getImageType(imageFile);
+
+      console.log("Starting image upload...");
+
+      // Step 2: Upload the image
+      const imageResponse = await axios.post("/api/v1/images", {
+        base64Image: base64Image,
+        imageType: imageType,
+      });
+
+      const imageUrl = imageResponse.data.url;
+      console.log("Image uploaded successfully:", imageResponse.data);
+
+      // Step 3: Create the banner with the image URL
+      const bannerResponse = await axios.post("/api/v1/banner", {
+        description: description,
+        imageUrl: imageUrl,
+        status: status,
+      });
+
+      console.log("Banner created successfully:", bannerResponse.data);
+      setSubmissionResult(bannerResponse.data);
+    } catch (error) {
+      console.error("Error during submission:", error);
+      setSubmissionResult({
+        error:
+          error instanceof Error ? error.message : "An unknown error occurred",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
+    setImagePreview(null);
+    setImageFile(null);
+    setSubmissionResult(null);
+    setDescription("");
+  };
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Add New Banner</h2>
+        <h2 className="text-3xl font-bold tracking-tight">Create Banner</h2>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Banner Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter banner title" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Enter banner description (optional)"
-                          className="resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="position"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Position</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select banner position" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="home_top">Home Top</SelectItem>
-                          <SelectItem value="home_middle">Home Middle</SelectItem>
-                          <SelectItem value="home_bottom">Home Bottom</SelectItem>
-                          <SelectItem value="category_page">Category Page</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="url"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>URL</FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://example.com/page" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        The URL where users will be directed when they click the banner.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid gap-6 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="startDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Start Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground",
-                                )}
-                              >
-                                {field.value ? field.value.toLocaleDateString() : <span>Pick a date</span>}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="endDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>End Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground",
-                                )}
-                              >
-                                {field.value ? field.value.toLocaleDateString() : <span>Pick a date</span>}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="isActive"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Active Status</FormLabel>
-                        <FormDescription>Make this banner active immediately after creation.</FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" type="button" onClick={() => router.back()}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Create Banner</Button>
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader>
             <CardTitle>Banner Image</CardTitle>
@@ -266,7 +140,7 @@ export default function NewBannerPage() {
                 {imagePreview ? (
                   <div className="relative aspect-[3/1] w-full overflow-hidden rounded-lg">
                     <img
-                      src={imagePreview || "/placeholder.svg"}
+                      src={imagePreview}
                       alt="Banner preview"
                       className="h-full w-full object-cover"
                     />
@@ -274,7 +148,8 @@ export default function NewBannerPage() {
                       variant="secondary"
                       size="sm"
                       className="absolute right-2 top-2"
-                      onClick={() => setImagePreview(null)}
+                      onClick={resetForm}
+                      disabled={isSubmitting}
                     >
                       Change Image
                     </Button>
@@ -285,10 +160,18 @@ export default function NewBannerPage() {
                       <ImageIcon className="h-10 w-10 text-muted-foreground" />
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-medium">Drag and drop your banner image here</p>
-                      <p className="text-xs text-muted-foreground">Recommended size: 1200 x 400 pixels (3:1 ratio)</p>
+                      <p className="text-sm font-medium">
+                        Drag and drop your banner image here
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Recommended size: 1200 x 400 pixels (3:1 ratio)
+                      </p>
                     </div>
-                    <Button variant="secondary" className="gap-2">
+                    <Button
+                      variant="secondary"
+                      className="relative gap-2"
+                      disabled={isSubmitting}
+                    >
                       <UploadCloud className="h-4 w-4" />
                       <span>Upload Image</span>
                       <Input
@@ -296,6 +179,7 @@ export default function NewBannerPage() {
                         accept="image/*"
                         className="absolute inset-0 cursor-pointer opacity-0"
                         onChange={handleImageChange}
+                        disabled={isSubmitting}
                       />
                     </Button>
                   </>
@@ -314,8 +198,71 @@ export default function NewBannerPage() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Banner Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  placeholder="Enter banner description"
+                  className="mt-1 resize-none"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <label className="text-base">Active Status</label>
+                  <p className="text-sm text-muted-foreground">
+                    Make this banner active immediately after creation.
+                  </p>
+                </div>
+                <Switch
+                  checked={status === "ACTIVE"}
+                  onCheckedChange={(checked) =>
+                    setStatus(checked ? "ACTIVE" : "INACTIVE")
+                  }
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <Button
+                onClick={handleSubmit}
+                className="w-full"
+                disabled={!imageFile || isSubmitting}
+              >
+                {isSubmitting ? "Submitting..." : "Create Banner"}
+              </Button>
+
+              {submissionResult && (
+                <div
+                  className={`rounded-md p-4 ${
+                    submissionResult.error ? "bg-red-50" : "bg-green-50"
+                  }`}
+                >
+                  <p
+                    className={`text-sm ${
+                      submissionResult.error ? "text-red-800" : "text-green-800"
+                    }`}
+                  >
+                    {submissionResult.error
+                      ? `Error: ${submissionResult.error}`
+                      : `Banner submitted successfully! ID: ${submissionResult.id}`}
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
-  )
-}
+  );
+};
 
+export default ImageUploadAndBannerSubmission;
