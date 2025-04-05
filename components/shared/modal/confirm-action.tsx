@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, AlertCircle } from "lucide-react";
+import { X, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,7 +13,7 @@ interface CustomDialogProps {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void> | void;
   variant?: "danger" | "warning" | "info";
   className?: string;
   size?: "sm" | "md" | "lg" | "xl" | "full";
@@ -34,13 +34,14 @@ const ConfirmDialog = ({
   showIcon = true,
 }: CustomDialogProps) => {
   const [isMounted, setIsMounted] = useState(false);
+  const [isConfirmLoading, setIsConfirmLoading] = useState(false);
 
   // Handle escape key press
   useEffect(() => {
     setIsMounted(true);
 
     const handleEscapeKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === "Escape" && isOpen && !isConfirmLoading) {
         onClose();
       }
     };
@@ -50,7 +51,24 @@ const ConfirmDialog = ({
     return () => {
       window.removeEventListener("keydown", handleEscapeKey);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isConfirmLoading]);
+
+  // Handle confirmation with loading state
+  const handleConfirm = async () => {
+    try {
+      setIsConfirmLoading(true);
+      const result = onConfirm();
+
+      // Check if it's a promise
+      if (result instanceof Promise) {
+        await result;
+      }
+    } catch (error) {
+      console.error("Confirmation error:", error);
+    } finally {
+      setIsConfirmLoading(false);
+    }
+  };
 
   // Don't render on the server
   if (!isMounted) return null;
@@ -112,7 +130,7 @@ const ConfirmDialog = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={!isConfirmLoading ? onClose : undefined}
             aria-hidden="true"
           />
 
@@ -137,9 +155,10 @@ const ConfirmDialog = ({
             >
               {/* Close button */}
               <button
-                onClick={onClose}
+                onClick={!isConfirmLoading ? onClose : undefined}
                 className="absolute right-4 top-4 rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 aria-label="Close dialog"
+                disabled={isConfirmLoading}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -175,14 +194,23 @@ const ConfirmDialog = ({
                     variant="outline"
                     onClick={onClose}
                     className="mt-3 sm:mt-0"
+                    disabled={isConfirmLoading}
                   >
                     {cancelLabel}
                   </Button>
                   <Button
                     variant={variantStyles.confirmButtonVariant}
-                    onClick={onConfirm}
+                    onClick={handleConfirm}
+                    disabled={isConfirmLoading}
                   >
-                    {confirmLabel}
+                    {isConfirmLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {confirmLabel}...
+                      </>
+                    ) : (
+                      confirmLabel
+                    )}
                   </Button>
                 </div>
               </div>

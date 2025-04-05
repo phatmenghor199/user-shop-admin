@@ -35,6 +35,7 @@ import { Switch } from "@/components/ui/switch";
 import ImageMe from "@/components/shared/images/image_me";
 import { BannerFilterOptions } from "@/models/dashboard/banner/banner-filter.model";
 import {
+  deleteBannerService,
   getAllBannerAdminService,
   updateBannerService,
 } from "@/services/dashboard/banner.service";
@@ -51,6 +52,7 @@ import { bannerAdminTableHeader } from "@/constants/tables/banner";
 import { DateTimeFormat } from "@/utils/date/date-time-format";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/shared/modal/confirm-action";
+import { set } from "date-fns";
 
 export function BannersTable() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -124,7 +126,28 @@ export function BannersTable() {
     }
   };
 
-  async function handleDeleteUser() {}
+  async function handleDeleteUser() {
+    if (banner) {
+      setBannerData((prevData) => {
+        if (!prevData) return null;
+        const updatedContent = prevData.content.filter(
+          (item) => item.id !== banner.id
+        );
+        return {
+          ...prevData,
+          content: updatedContent,
+        };
+      });
+      setIsDeleteDialogOpen(false);
+
+      const resposne = await deleteBannerService(banner.id);
+      if (resposne) {
+        toast.success("Banner deleted successfully");
+      } else {
+        toast.error("Failed to delete banner");
+      }
+    }
+  }
 
   return (
     <Card>
@@ -276,7 +299,10 @@ export function BannersTable() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => {}}
+                                onClick={() => {
+                                  setIsDeleteDialogOpen(true);
+                                  setBanner(banner);
+                                }}
                                 className="text-destructive"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -308,7 +334,7 @@ export function BannersTable() {
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         title="Delete User"
-        description="Are you sure you want to delete this user? This action cannot be undone."
+        description="Are you sure you want to delete this banner? This action cannot be undone."
         confirmLabel="Delete"
         cancelLabel="Cancel"
         onConfirm={handleDeleteUser}

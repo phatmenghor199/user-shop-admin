@@ -24,7 +24,12 @@ export async function getBannerByIdService(id: string) {
   }
 }
 
-export async function createBannerService(data: any) {
+interface CreateBannerModel {
+  description: string;
+  imageUrl: string;
+  status: string;
+}
+export async function createBannerService(data: CreateBannerModel) {
   try {
     const response = await axiosClientWithAuth.post(`/v1/banner`, data);
     return response.data.data;
@@ -54,3 +59,13 @@ export async function updateBannerService(
     return null;
   }
 }
+
+export const deleteBannerService = async (id: number) => {
+  try {
+    const resposne = await axiosClientWithAuth.delete(`/v1/banner/${id}`);
+    return resposne.data.data;
+  } catch (err) {
+    console.error("Error deleting banner:", err);
+    return null;
+  }
+};
