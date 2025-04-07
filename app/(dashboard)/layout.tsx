@@ -1,51 +1,54 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
-import { useEffect, useState } from "react"
-import { usePathname } from "next/navigation"
-
-import { DashboardSidebar } from "@/components/dashboard/sidebar"
-import { TopBar } from "@/components/dashboard/top-bar"
-import { useIsMobile } from "@/hooks/use-mobile"
-import { cn } from "@/lib/utils"
+import { DashboardSidebar } from "@/components/dashboard/sidebar";
+import { TopBar } from "@/components/dashboard/top-bar";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const isMobile = useIsMobile()
-  const pathname = usePathname()
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const isMobile = useIsMobile();
+  const pathname = usePathname();
 
   // Close sidebar on mobile when navigating
   useEffect(() => {
     if (isMobile) {
-      setIsSidebarOpen(false)
+      setIsSidebarOpen(false);
     }
-  }, [pathname, isMobile])
+  }, [pathname, isMobile]);
 
   // Set sidebar to open by default on desktop
   useEffect(() => {
     if (!isMobile) {
-      setIsSidebarOpen(true)
+      setIsSidebarOpen(true);
     }
-  }, [isMobile])
+  }, [isMobile]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <DashboardSidebar isOpen={isSidebarOpen} onToggle={() => setIsSidebarOpen(!isSidebarOpen)} />
+    <div className="flex h-screen bg-background">
+      <DashboardSidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+      />
       <div
         className={cn(
-          "flex flex-1 flex-col overflow-hidden transition-all duration-300",
-          isMobile ? "w-full" : isSidebarOpen ? "ml-64" : "ml-[70px]",
+          "flex flex-1 flex-col transition-all duration-300",
+          isMobile ? "w-full" : isSidebarOpen ? "ml-64" : "ml-[70px]"
         )}
       >
         <TopBar onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 pt-4 md:pt-6 md:px-6">
+          <div className="h-full">{children}</div>
+        </main>
       </div>
     </div>
-  )
+  );
 }
-
