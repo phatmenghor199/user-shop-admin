@@ -1,35 +1,61 @@
-"use client"
+"use client";
 
-import type React from "react"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { ArrowLeft, Save, X, Plus, Trash, UploadCloud } from "lucide-react";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import Image from "next/image"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { ArrowLeft, Save, UploadCloud, X, Plus, Trash } from "lucide-react"
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator";
+import { CategorySelector } from "@/components/dashboard/products/category-selector";
+import { DiscountFields } from "@/components/dashboard/products/discount-field";
+import { ImageUploader } from "@/components/dashboard/products/image-uploader";
+import { SizeVariant } from "@/components/dashboard/products/size-variant";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useToast } from "@/hooks/use-toast"
-
-// Define the size variant type
-type SizeVariant = {
-  id: string
-  name: string
-  price: number
-  stock: number
-  image: string | null
+// Define enums matching the backend
+enum DiscountType {
+  PERCENTAGE = "PERCENTAGE",
+  FIXED_AMOUNT = "FIXED_AMOUNT",
 }
 
+enum StatusData {
+  ACTIVE = "ACTIVE",
+  INACTIVE = "INACTIVE",
+}
+
+// Form schema validation
 const formSchema = z.object({
   name: z.string().min(2, {
     message: "Product name must be at least 2 characters.",
@@ -37,149 +63,303 @@ const formSchema = z.object({
   description: z.string().min(10, {
     message: "Description must be at least 10 characters.",
   }),
-  category: z.string({
+  categoryId: z.string({
     required_error: "Please select a category.",
   }),
-  price: z.coerce.number().positive({
-    message: "Price must be a positive number.",
+  price: z.coerce.number().min(0, {
+    message: "Price must be a non-negative number.",
   }),
-  stock: z.coerce.number().int().nonnegative({
-    message: "Stock must be a non-negative integer.",
-  }),
-  sku: z.string().min(3, {
-    message: "SKU must be at least 3 characters.",
-  }),
-  barcode: z.string().optional(),
-  weight: z.coerce.number().positive({
-    message: "Weight must be a positive number.",
-  }),
-  length: z.coerce.number().positive({
-    message: "Length must be a positive number.",
-  }),
-  width: z.coerce.number().positive({
-    message: "Width must be a positive number.",
-  }),
-  height: z.coerce.number().positive({
-    message: "Height must be a positive number.",
-  }),
-  isActive: z.boolean().default(true),
-  isFeatured: z.boolean().default(false),
+  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
+
+  // Discount fields (optional)
+  discountType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).optional().nullable(),
+  discountValue: z.coerce.number().optional().nullable(),
+  discountStartDate: z.string().optional().nullable(),
+  discountEndDate: z.string().optional().nullable(),
+
+  // Helper field for UI
   hasSizes: z.boolean().default(false),
-})
+});
 
-// Sample categories for the dropdown
-const categories = [
-  { id: "electronics", name: "Electronics" },
-  { id: "clothing", name: "Clothing" },
-  { id: "accessories", name: "Accessories" },
-  { id: "home", name: "Home & Kitchen" },
-  { id: "sports", name: "Sports" },
-]
+type FormValues = z.infer<typeof formSchema>;
 
-export default function NewProductPage() {
-  const [images, setImages] = useState<string[]>([])
-  const [sizeVariants, setSizeVariants] = useState<SizeVariant[]>([])
-  const [hasSizes, setHasSizes] = useState(false)
-  const router = useRouter()
-  const { toast } = useToast()
+const sizeSchema = z.object({
+  size: z.string().min(1, { message: "Size name is required" }),
+  price: z.coerce.number().min(0, { message: "Price must be zero or higher" }),
+  status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  // Discount fields (optional)
+  discountType: z.enum(["PERCENTAGE", "FIXED_AMOUNT"]).optional().nullable(),
+  discountValue: z.coerce.number().optional().nullable(),
+  discountStartDate: z.string().optional().nullable(),
+  discountEndDate: z.string().optional().nullable(),
+});
+
+type SizeFormValues = z.infer<typeof sizeSchema>;
+
+interface ImageData {
+  base64Image: string;
+  imageType: string;
+}
+
+export default function CreateProductPage() {
+  const [mainImage, setMainImage] = useState<ImageData | null>(null);
+  const [additionalImages, setAdditionalImages] = useState<ImageData[]>([]);
+  const [sizes, setSizes] = useState<
+    (SizeFormValues & {
+      id?: number;
+      mainImage?: ImageData | null;
+      additionalImages?: ImageData[];
+    })[]
+  >([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // Initialize form
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       description: "",
-      category: "",
+      categoryId: "",
       price: 0,
-      stock: 0,
-      sku: "",
-      barcode: "",
-      weight: 0,
-      length: 0,
-      width: 0,
-      height: 0,
-      isActive: true,
-      isFeatured: false,
+      status: StatusData.ACTIVE,
       hasSizes: false,
     },
-  })
+  });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // Combine the form values with size variants if applicable
-    const productData = {
-      ...values,
-      sizeVariants: hasSizes ? sizeVariants : [],
-      images,
+  const hasSizes = form.watch("hasSizes");
+
+  // Add a new size
+  const addSize = () => {
+    setSizes([
+      ...sizes,
+      {
+        size: "",
+        price: form.getValues().price || 0,
+        status: StatusData.ACTIVE,
+        mainImage: null,
+        additionalImages: [],
+      },
+    ]);
+  };
+
+  // Remove a size
+  const removeSize = (index: number) => {
+    setSizes(sizes.filter((_, i) => i !== index));
+  };
+
+  // Update size field
+  const updateSizeField = (
+    index: number,
+    field: keyof SizeFormValues,
+    value: any
+  ) => {
+    const newSizes = [...sizes];
+    newSizes[index] = { ...newSizes[index], [field]: value };
+    setSizes(newSizes);
+  };
+
+  // Handle size image upload
+  const handleSizeImageUpload = (
+    index: number,
+    imageData: ImageData | null
+  ) => {
+    const newSizes = [...sizes];
+    newSizes[index].mainImage = imageData;
+    setSizes(newSizes);
+  };
+
+  // Handle size additional image upload
+  const handleSizeAdditionalImageUpload = (
+    index: number,
+    imageData: ImageData
+  ) => {
+    const newSizes = [...sizes];
+    if (!newSizes[index].additionalImages) {
+      newSizes[index].additionalImages = [];
     }
+    newSizes[index].additionalImages?.push(imageData);
+    setSizes(newSizes);
+  };
 
-    console.log(productData)
-    toast({
-      title: "Product created",
-      description: "Your product has been created successfully.",
-    })
-    router.push("/dashboard/products")
-  }
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImages([...(reader.result as string), ...images])
-      }
-      reader.readAsDataURL(file)
+  // Remove size additional image
+  const removeSizeAdditionalImage = (sizeIndex: number, imageIndex: number) => {
+    const newSizes = [...sizes];
+    if (newSizes[sizeIndex].additionalImages) {
+      newSizes[sizeIndex].additionalImages = newSizes[
+        sizeIndex
+      ].additionalImages?.filter((_, i) => i !== imageIndex);
     }
-  }
+    setSizes(newSizes);
+  };
 
-  const removeImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index))
-  }
-
-  const handleSizeVariantImageUpload = (e: React.ChangeEvent<HTMLInputElement>, variantId: string) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setSizeVariants((variants) =>
-          variants.map((variant) =>
-            variant.id === variantId ? { ...variant, image: reader.result as string } : variant,
-          ),
-        )
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const addSizeVariant = () => {
-    const newVariant: SizeVariant = {
-      id: `size-${Date.now()}`,
-      name: "",
-      price: form.getValues().price || 0,
-      stock: form.getValues().stock || 0,
-      image: null,
-    }
-    setSizeVariants([...sizeVariants, newVariant])
-  }
-
-  const removeSizeVariant = (variantId: string) => {
-    setSizeVariants(sizeVariants.filter((variant) => variant.id !== variantId))
-  }
-
-  const updateSizeVariant = (variantId: string, field: keyof SizeVariant, value: any) => {
-    setSizeVariants((variants) =>
-      variants.map((variant) => (variant.id === variantId ? { ...variant, [field]: value } : variant)),
-    )
-  }
-
-  // Toggle size variants feature
+  // Toggle sizes feature
   const toggleSizeVariants = (value: boolean) => {
-    setHasSizes(value)
-    form.setValue("hasSizes", value)
+    form.setValue("hasSizes", value);
 
-    // Add a default size variant if enabling and none exist
-    if (value && sizeVariants.length === 0) {
-      addSizeVariant()
+    if (value && sizes.length === 0) {
+      addSize();
     }
-  }
+  };
+
+  // Utility function to check if a date is valid
+  const isValidDate = (dateString: string | null | undefined) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    return !isNaN(date.getTime());
+  };
+
+  // Submit handler
+  const onSubmit = async (values: FormValues) => {
+    try {
+      setIsLoading(true);
+
+      // Validate category selection
+      if (!values.categoryId) {
+        toast({
+          title: "Error",
+          description: "Please select a category for the product",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Prepare the request payload
+      const productData = {
+        name: values.name,
+        description: values.description,
+        price: values.price,
+        categoryId: parseInt(values.categoryId),
+        status: values.status,
+      };
+
+      // Add image only if provided (can be null)
+      if (mainImage) {
+        Object.assign(productData, { image: mainImage });
+      }
+
+      // Add additional images only if provided
+      if (additionalImages.length > 0) {
+        Object.assign(productData, { additionalImages });
+      }
+
+      // Add discount fields if both type and value are provided
+      if (
+        values.discountType &&
+        values.discountValue !== null &&
+        values.discountValue !== undefined
+      ) {
+        Object.assign(productData, {
+          discountType: values.discountType,
+          discountValue: values.discountValue,
+        });
+
+        // Add date range only if both dates are provided
+        if (
+          isValidDate(values.discountStartDate) &&
+          isValidDate(values.discountEndDate)
+        ) {
+          Object.assign(productData, {
+            discountStartDate: values.discountStartDate,
+            discountEndDate: values.discountEndDate,
+          });
+        }
+      }
+
+      // Add sizes if enabled
+      if (values.hasSizes && sizes.length > 0) {
+        // Validate sizes have names
+        const invalidSizes = sizes.filter((size) => !size.size.trim());
+        if (invalidSizes.length > 0) {
+          toast({
+            title: "Error",
+            description: "All size variants must have a name",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        Object.assign(productData, {
+          sizes: sizes.map((size) => {
+            const sizeData: any = {
+              size: size.size,
+              price: size.price,
+              status: size.status,
+            };
+
+            // Add size image only if provided
+            if (size.mainImage) {
+              sizeData.image = size.mainImage;
+            }
+
+            // Add size additional images if provided
+            if (size.additionalImages?.length) {
+              sizeData.additionalImages = size.additionalImages;
+            }
+
+            // Add size discount only if both type and value are provided
+            if (
+              size.discountType &&
+              size.discountValue !== null &&
+              size.discountValue !== undefined
+            ) {
+              sizeData.discountType = size.discountType;
+              sizeData.discountValue = size.discountValue;
+
+              // Add size discount dates if provided
+              if (
+                isValidDate(size.discountStartDate) &&
+                isValidDate(size.discountEndDate)
+              ) {
+                sizeData.discountStartDate = size.discountStartDate;
+                sizeData.discountEndDate = size.discountEndDate;
+              }
+            }
+
+            return sizeData;
+          }),
+        });
+      }
+
+      console.log("Submitting product data:", productData);
+
+      // Send the request to the backend
+      const response = await fetch("/api/v1/product", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(productData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Error: ${response.status}`);
+      }
+
+      toast({
+        title: "Success",
+        description: "Product created successfully",
+      });
+
+      // Redirect to products list page
+      router.push("/dashboard/products");
+    } catch (error) {
+      console.error("Error creating product:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to create product",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -198,23 +378,23 @@ export default function NewProductPage() {
       <Tabs defaultValue="basic" className="space-y-4">
         <TabsList>
           <TabsTrigger value="basic">Basic Information</TabsTrigger>
-          <TabsTrigger value="images">Images</TabsTrigger>
-          <TabsTrigger value="inventory">Inventory</TabsTrigger>
           <TabsTrigger value="sizes">Sizes & Variants</TabsTrigger>
-          <TabsTrigger value="shipping">Shipping</TabsTrigger>
         </TabsList>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <TabsContent value="basic">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Basic Information</CardTitle>
-                  <CardDescription>Enter the basic information of your product.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-6">
-                    <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-6 md:grid-cols-12">
+                {/* Main product information */}
+                <Card className="md:col-span-8">
+                  <CardHeader>
+                    <CardTitle>Product Details</CardTitle>
+                    <CardDescription>
+                      Enter the basic information of your product.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4">
                       <FormField
                         control={form.control}
                         name="name"
@@ -222,7 +402,10 @@ export default function NewProductPage() {
                           <FormItem>
                             <FormLabel>Product Name</FormLabel>
                             <FormControl>
-                              <Input placeholder="Enter product name" {...field} />
+                              <Input
+                                placeholder="Enter product name"
+                                {...field}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -231,229 +414,203 @@ export default function NewProductPage() {
 
                       <FormField
                         control={form.control}
-                        name="category"
+                        name="categoryId"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Category</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a category" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {categories.map((category) => (
-                                  <SelectItem key={category.id} value={category.id}>
-                                    {category.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <CategorySelector
+                              value={field.value}
+                              onChange={field.onChange}
+                            />
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
 
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description</FormLabel>
-                          <FormControl>
-                            <Textarea placeholder="Enter product description" className="min-h-[120px]" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="grid gap-4 md:grid-cols-2">
                       <FormField
                         control={form.control}
-                        name="isActive"
+                        name="description"
                         render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <FormItem>
+                            <FormLabel>Description</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Enter product description"
+                                className="min-h-[100px]"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name="price"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Price</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="status"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Status</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select status" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value={StatusData.ACTIVE}>
+                                    Active
+                                  </SelectItem>
+                                  <SelectItem value={StatusData.INACTIVE}>
+                                    Inactive
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <Separator className="my-2" />
+
+                      <FormField
+                        control={form.control}
+                        name="hasSizes"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                             <div className="space-y-0.5">
-                              <FormLabel className="text-base">Active Status</FormLabel>
-                              <FormDescription>Make this product visible on the store.</FormDescription>
+                              <FormLabel className="text-base">
+                                Product Has Size Variants
+                              </FormLabel>
+                              <FormDescription>
+                                Enable for different sizes with different prices
+                              </FormDescription>
                             </div>
                             <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={(value) => {
+                                  field.onChange(value);
+                                  toggleSizeVariants(value);
+                                }}
+                              />
                             </FormControl>
                           </FormItem>
                         )}
                       />
 
-                      <FormField
-                        control={form.control}
-                        name="isFeatured"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel className="text-base">Featured Product</FormLabel>
-                              <FormDescription>Show this product in featured sections.</FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch checked={field.value} onCheckedChange={field.onChange} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                      <Separator className="my-2" />
 
-                    <FormField
-                      control={form.control}
-                      name="hasSizes"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Product Has Size Variants</FormLabel>
-                            <FormDescription>
-                              Enable if this product comes in different sizes with different prices.
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch
-                              checked={field.value}
-                              onCheckedChange={(value) => {
-                                field.onChange(value)
-                                toggleSizeVariants(value)
-                              }}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="images">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Product Images</CardTitle>
-                  <CardDescription>Upload images for your product.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      {images.map((image, index) => (
-                        <div key={index} className="relative aspect-square overflow-hidden rounded-lg border">
-                          <Image
-                            src={image || "/placeholder.svg"}
-                            alt={`Product image ${index + 1}`}
-                            fill
-                            className="object-cover"
-                          />
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            className="absolute right-2 top-2 h-6 w-6"
-                            onClick={() => removeImage(index)}
-                          >
-                            <X className="h-4 w-4" />
-                            <span className="sr-only">Remove image</span>
-                          </Button>
-                        </div>
-                      ))}
-                      <div className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed">
-                        <UploadCloud className="mb-2 h-8 w-8 text-muted-foreground" />
-                        <p className="text-sm font-medium">Upload Image</p>
-                        <p className="text-xs text-muted-foreground">Drag and drop or click to upload</p>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          className="absolute inset-0 cursor-pointer opacity-0"
-                          onChange={handleImageUpload}
+                      <div className="space-y-4">
+                        <h3 className="text-base font-medium">
+                          Discount Settings
+                        </h3>
+                        <DiscountFields
+                          form={form}
+                          discountTypeField="discountType"
+                          discountValueField="discountValue"
+                          startDateField="discountStartDate"
+                          endDateField="discountEndDate"
                         />
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
 
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium">Image Requirements</h3>
-                      <ul className="list-inside list-disc text-sm text-muted-foreground">
-                        <li>File formats: JPG, PNG, or WebP</li>
-                        <li>Maximum file size: 2MB</li>
-                        <li>Recommended aspect ratio: 1:1 (square)</li>
-                        <li>Minimum dimensions: 800 x 800 pixels</li>
-                      </ul>
+                {/* Images */}
+                <Card className="md:col-span-4">
+                  <CardHeader>
+                    <CardTitle>Product Images</CardTitle>
+                    <CardDescription>Upload product images</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-medium mb-2">Main Image</h3>
+                        <ImageUploader
+                          image={mainImage}
+                          onImageUpload={setMainImage}
+                          onImageRemove={() => setMainImage(null)}
+                          className="aspect-square h-36"
+                        />
+                      </div>
+
+                      <Separator className="my-2" />
+
+                      <div>
+                        <h3 className="text-sm font-medium mb-2">
+                          Additional Images
+                        </h3>
+                        <div className="grid gap-2 grid-cols-2">
+                          {additionalImages.map((image, index) => (
+                            <div
+                              key={index}
+                              className="relative aspect-square h-16 overflow-hidden rounded-md border"
+                            >
+                              <Image
+                                src={`data:image/${image.imageType};base64,${image.base64Image}`}
+                                alt={`Additional image ${index + 1}`}
+                                fill
+                                className="object-cover"
+                              />
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                className="absolute right-1 top-1 h-5 w-5"
+                                onClick={() =>
+                                  setAdditionalImages(
+                                    additionalImages.filter(
+                                      (_, i) => i !== index
+                                    )
+                                  )
+                                }
+                                type="button"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                          {additionalImages.length < 4 && (
+                            <ImageUploader
+                              onImageUpload={(data) =>
+                                setAdditionalImages([...additionalImages, data])
+                              }
+                              className="aspect-square h-16"
+                              icon={<Plus className="h-4 w-4" />}
+                              label="Add"
+                            />
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="inventory">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Inventory Information</CardTitle>
-                  <CardDescription>Enter inventory details for your product.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-6">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <FormField
-                        control={form.control}
-                        name="price"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Price</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="stock"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Stock Quantity</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" step="1" placeholder="0" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="sku"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>SKU (Stock Keeping Unit)</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Enter SKU" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="barcode"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Barcode (ISBN, UPC, GTIN, etc.)</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Enter barcode (optional)" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="sizes">
@@ -462,107 +619,50 @@ export default function NewProductPage() {
                   <CardTitle>Size Variants</CardTitle>
                   <CardDescription>
                     {hasSizes
-                      ? "Manage different sizes and their specific prices, stock, and images."
+                      ? "Manage different sizes and their specific prices and images."
                       : "Enable size variants in the Basic Information tab to manage different sizes."}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {!hasSizes ? (
                     <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-dashed">
-                      <p className="text-sm text-muted-foreground">Size variants are disabled</p>
-                      <Button variant="outline" className="mt-4" onClick={() => toggleSizeVariants(true)}>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Size variants are disabled
+                      </p>
+                      <Button
+                        variant="outline"
+                        onClick={() => toggleSizeVariants(true)}
+                      >
                         Enable Size Variants
                       </Button>
                     </div>
                   ) : (
-                    <div className="space-y-6">
-                      {sizeVariants.map((variant, index) => (
-                        <div key={variant.id} className="rounded-lg border p-4">
-                          <div className="mb-4 flex items-center justify-between">
-                            <h3 className="text-lg font-medium">Size Variant {index + 1}</h3>
-                            <Button variant="ghost" size="icon" onClick={() => removeSizeVariant(variant.id)}>
-                              <Trash className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-4">
-                              <div>
-                                <FormLabel>Size Name</FormLabel>
-                                <Input
-                                  placeholder="e.g., Small, Medium, Large, XL"
-                                  value={variant.name}
-                                  onChange={(e) => updateSizeVariant(variant.id, "name", e.target.value)}
-                                />
-                              </div>
-
-                              <div>
-                                <FormLabel>Price</FormLabel>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  value={variant.price}
-                                  onChange={(e) =>
-                                    updateSizeVariant(variant.id, "price", Number.parseFloat(e.target.value))
-                                  }
-                                />
-                              </div>
-
-                              <div>
-                                <FormLabel>Stock</FormLabel>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  placeholder="0"
-                                  value={variant.stock}
-                                  onChange={(e) =>
-                                    updateSizeVariant(variant.id, "stock", Number.parseInt(e.target.value))
-                                  }
-                                />
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col items-center justify-center">
-                              <div className="relative aspect-square w-full max-w-[200px] overflow-hidden rounded-lg border">
-                                {variant.image ? (
-                                  <>
-                                    <Image
-                                      src={variant.image || "/placeholder.svg"}
-                                      alt={`Size variant ${variant.name}`}
-                                      fill
-                                      className="object-cover"
-                                    />
-                                    <Button
-                                      variant="secondary"
-                                      size="sm"
-                                      className="absolute right-2 top-2"
-                                      onClick={() => updateSizeVariant(variant.id, "image", null)}
-                                    >
-                                      Change
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <div className="flex h-full w-full flex-col items-center justify-center">
-                                    <UploadCloud className="mb-2 h-8 w-8 text-muted-foreground" />
-                                    <p className="text-xs text-muted-foreground">Upload size image</p>
-                                    <Input
-                                      type="file"
-                                      accept="image/*"
-                                      className="absolute inset-0 cursor-pointer opacity-0"
-                                      onChange={(e) => handleSizeVariantImageUpload(e, variant.id)}
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                    <div className="space-y-4">
+                      {sizes.map((size, index) => (
+                        <SizeVariant
+                          key={index}
+                          index={index}
+                          size={size}
+                          onUpdate={updateSizeField}
+                          onRemove={() => removeSize(index)}
+                          onImageUpload={(imageData) =>
+                            handleSizeImageUpload(index, imageData)
+                          }
+                          onAdditionalImageUpload={(imageData) =>
+                            handleSizeAdditionalImageUpload(index, imageData)
+                          }
+                          onAdditionalImageRemove={(imageIndex) =>
+                            removeSizeAdditionalImage(index, imageIndex)
+                          }
+                        />
                       ))}
 
-                      <Button variant="outline" className="w-full" onClick={addSizeVariant}>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={addSize}
+                        type="button"
+                      >
                         <Plus className="mr-2 h-4 w-4" />
                         Add Another Size
                       </Button>
@@ -572,90 +672,18 @@ export default function NewProductPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="shipping">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Shipping Information</CardTitle>
-                  <CardDescription>Enter shipping details for your product.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-6">
-                    <FormField
-                      control={form.control}
-                      name="weight"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Weight (kg)</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" step="0.01" placeholder="0.00" {...field} />
-                          </FormControl>
-                          <FormDescription>Product weight in kilograms.</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <FormField
-                        control={form.control}
-                        name="length"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Length (cm)</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" step="0.1" placeholder="0.0" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="width"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Width (cm)</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" step="0.1" placeholder="0.0" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="height"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Height (cm)</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" step="0.1" placeholder="0.0" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
             <div className="mt-6 flex justify-end gap-3">
               <Button variant="outline" type="button" asChild>
                 <Link href="/dashboard/products">Cancel</Link>
               </Button>
-              <Button type="submit" className="gap-1">
+              <Button type="submit" className="gap-1" disabled={isLoading}>
                 <Save className="h-4 w-4" />
-                Create Product
+                {isLoading ? "Creating..." : "Create Product"}
               </Button>
             </div>
           </form>
         </Form>
       </Tabs>
     </div>
-  )
+  );
 }
-
