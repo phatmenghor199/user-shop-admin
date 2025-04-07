@@ -14,19 +14,22 @@ export async function getAllBannerAdminService(param: BannerFilterOptions) {
   }
 }
 
-export async function getBannerByIdService(id: string) {
+export async function getBannerByIdService(id: number) {
   try {
     const response = await axiosClientWithAuth.get(`/v1/banner/${id}`);
     return response.data.data;
   } catch (error: any) {
-    console.error("Error fetching all shop admins:", error);
+    console.error("Error fetching banner by ID:", error);
     return null;
   }
 }
 
 interface CreateBannerModel {
   description: string;
-  imageUrl: string;
+  image: {
+    base64Image: string;
+    imageType: string;
+  };
   status: string;
 }
 export async function createBannerService(data: CreateBannerModel) {
@@ -41,7 +44,10 @@ export async function createBannerService(data: CreateBannerModel) {
 
 interface UpdateBannerModel {
   description?: string;
-  imageUrl?: string;
+  image?: {
+    base64Image?: string;
+    imageType?: string;
+  };
   status?: string;
 }
 export async function updateBannerService(

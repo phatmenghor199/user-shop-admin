@@ -34,6 +34,11 @@ import {
 } from "@/utils/images/sore-image";
 import { uploadImageService } from "@/services/setting/image.service";
 import { axiosClientWithAuth } from "@/utils/axios";
+import {
+  getBannerByIdService,
+  updateBannerService,
+} from "@/services/dashboard/banner.service";
+import { BannerModel } from "@/models/dashboard/banner/banner.model";
 
 // Define Zod schema for form validation
 const bannerFormSchema = z.object({
@@ -43,17 +48,6 @@ const bannerFormSchema = z.object({
 
 // Type inference from the schema
 type BannerFormValues = z.infer<typeof bannerFormSchema>;
-
-// Type for banner details from API
-interface BannerModel {
-  id: number;
-  description: string;
-  imageUrl: string;
-  status: "ACTIVE" | "INACTIVE";
-  shopId?: number;
-  createdAt: string;
-  updatedAt?: string;
-}
 
 const EditBannerPage = () => {
   const params = useParams();
@@ -67,6 +61,7 @@ const EditBannerPage = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
 
   // Initialize form with Zod validation
   const form = useForm<BannerFormValues>({
@@ -82,21 +77,15 @@ const EditBannerPage = () => {
     const fetchBannerDetails = async () => {
       try {
         setIsLoading(true);
-        const response = await axiosClientWithAuth.get(
-          `/v1/banner/${params.id}`
-        );
-        const bannerData = response.data.data;
-
-        // Set form values
+        const response = await getBannerByIdService(Number(params.id));
         form.reset({
-          description: bannerData.description,
-          status: bannerData.status,
+          description: response.description,
+          status: response.status,
         });
-
-        // Set initial image preview
-        setImagePreview(BASE_URL_API + bannerData.imageUrl);
-
-        setBanner(bannerData);
+        const imageUrl = BASE_URL_API + response?.image?.url || "";
+        setImagePreview(imageUrl);
+        setOriginalImageUrl(imageUrl);
+        setBanner(response);
       } catch (err) {
         toast.error("Failed to fetch banner details");
         console.error(err);
@@ -146,6 +135,13 @@ const EditBannerPage = () => {
     fileInputRef.current?.click();
   };
 
+  // Reset image to original
+  const resetImage = () => {
+    setImagePreview(originalImageUrl);
+    setImageFile(null);
+    setImageError(null);
+  };
+
   // Handle form submission
   const onSubmit = async (values: BannerFormValues) => {
     if (!banner) return;
@@ -153,41 +149,36 @@ const EditBannerPage = () => {
     try {
       setIsSubmitting(true);
 
-      let imageUrl = banner.imageUrl;
-
-      // Upload new image if selected
+      // Check if an image was uploaded
       if (imageFile) {
+        // Handle image upload and banner update together
         const base64Image = await convertToBase64(imageFile);
         const imageType = getImageType(imageFile);
 
-        const imageResponse = await uploadImageService({
-          base64Image: base64Image,
-          imageType: imageType,
+        // Update banner with new image
+        const response = await updateBannerService(banner.id, {
+          ...values,
+          image: {
+            base64Image: base64Image,
+            imageType: imageType,
+          },
         });
 
-        if (!imageResponse) {
-          toast.error("Failed to upload image");
-          return;
+        if (response) {
+          toast.success("Banner updated successfully");
+          router.push("/dashboard/banners");
+        } else {
+          toast.error("Failed to update banner");
         }
-
-        imageUrl = imageResponse.url;
-      }
-
-      // Update banner
-      const updateResponse = await axiosClientWithAuth.put(
-        `/v1/banner/${banner.id}`,
-        {
-          description: values.description,
-          imageUrl: imageUrl,
-          status: values.status,
-        }
-      );
-
-      if (updateResponse.data) {
-        toast.success("Banner updated successfully");
-        router.push("/dashboard/banners");
       } else {
-        toast.error("Failed to update banner");
+        const response = await updateBannerService(banner.id, values);
+
+        if (response) {
+          toast.success("Banner updated successfully");
+          router.push("/dashboard/banners");
+        } else {
+          toast.error("Failed to update banner");
+        }
       }
     } catch (error) {
       console.error("Error during submission:", error);
@@ -244,20 +235,28 @@ const EditBannerPage = () => {
                         alt="Banner preview"
                         className="h-full w-full object-cover"
                       />
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="absolute right-2 top-2"
-                        onClick={() => {
-                          setImagePreview(null);
-                          setImageFile(null);
-                          setImageError(null);
-                        }}
-                        disabled={isSubmitting}
-                        type="button"
-                      >
-                        Change Image
-                      </Button>
+                      <div className="absolute right-2 top-2 flex gap-2">
+                        {imageFile && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={resetImage}
+                            disabled={isSubmitting}
+                            type="button"
+                          >
+                            Reset
+                          </Button>
+                        )}
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleUploadClick}
+                          disabled={isSubmitting}
+                          type="button"
+                        >
+                          Change Image
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -272,14 +271,6 @@ const EditBannerPage = () => {
                           Recommended size: 1200 x 600 pixels (2:1 ratio)
                         </p>
                       </div>
-                      <Input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/jpg,image/png,image/webp"
-                        className="hidden"
-                        onChange={handleImageChange}
-                        disabled={isSubmitting}
-                      />
                       <Button
                         variant="secondary"
                         className="gap-2"
@@ -292,6 +283,14 @@ const EditBannerPage = () => {
                       </Button>
                     </>
                   )}
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleImageChange}
+                    disabled={isSubmitting}
+                  />
                 </div>
 
                 {imageError && (

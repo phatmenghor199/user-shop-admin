@@ -1,10 +1,10 @@
-import Link from "next/link"
-import { PlusCircle } from "lucide-react"
+import Link from "next/link";
+import { PlusCircle } from "lucide-react";
 
-import { Button } from "@/components/ui/button"
-import { CategoriesTable } from "@/components/dashboard/categories/categories-table"
+import { Button } from "@/components/ui/button";
+import { CategoriesTable } from "@/components/dashboard/categories/categories-table";
 
-export default function CategoriesPage() {
+export default function BannersPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -12,13 +12,12 @@ export default function CategoriesPage() {
         <Button asChild>
           <Link href="/dashboard/categories/new">
             <PlusCircle className="mr-2 h-4 w-4" />
-            Add Category
+            Add Categories
           </Link>
         </Button>
       </div>
 
       <CategoriesTable />
     </div>
-  )
+  );
 }
-

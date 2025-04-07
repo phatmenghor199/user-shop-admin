@@ -1,11 +1,16 @@
 export interface BannerModel {
   id: number;
   description: string;
-  imageUrl: string;
+  image: Image;
   shopId: number;
   status: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface Image {
+  id: number;
+  url: string;
 }
 
 export interface BannerPaginationModel {

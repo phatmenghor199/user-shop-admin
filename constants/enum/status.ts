@@ -6,7 +6,7 @@ export const STATUS_OPTIONS = [
 ];
 
 // Define possible status values for banners
-export enum BANNER_STATUS {
+export enum DATA_STATUS {
   ALL = "ALL",
   ACTIVE = "ACTIVE",
   INACTIVE = "INACTIVE",

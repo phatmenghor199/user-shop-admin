@@ -1,97 +1,221 @@
-"use client"
+"use client";
 
-import type React from "react"
+import React, { useState, useRef, useEffect } from "react";
+import { z } from "zod";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  UploadCloud,
+  AlertCircle,
+  CropIcon,
+  ImageIcon,
+} from "lucide-react";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import Image from "next/image"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-import { ArrowLeft, Save, Trash2, UploadCloud } from "lucide-react"
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import { BASE_URL_API } from "@/constants/api/route-api";
+import {
+  compareImageSize,
+  convertToBase64,
+  getImageType,
+  validTypes,
+} from "@/utils/images/sore-image";
+import { CategoriesModel } from "@/models/dashboard/categories/categories.model";
+import {
+  getCategoriesByIdService,
+  updateCategoriesService,
+} from "@/services/dashboard/categories.service";
+import Loading from "../../new/loading";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { useToast } from "@/hooks/use-toast"
-
-// This would normally come from a database
-const category = {
-  id: "CAT-001",
-  name: "Electronics",
-  slug: "electronics",
-  description: "Electronic devices and gadgets",
-  image: "/placeholder.svg?height=400&width=400",
-  productsCount: 120,
-  isActive: true,
-  parentCategory: null,
-  featured: true,
-}
-
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: "Category name must be at least 2 characters.",
-  }),
-  slug: z
+// Define Zod schema for form validation
+const categoryFormSchema = z.object({
+  name: z
     .string()
-    .min(2, {
-      message: "Slug must be at least 2 characters.",
-    })
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
-      message: "Slug must contain only lowercase letters, numbers, and hyphens.",
-    }),
-  description: z.string().optional(),
-  parentCategory: z.string().optional(),
-  isActive: z.boolean().default(true),
-  isFeatured: z.boolean().default(false),
-})
+    .min(1, "Category name is required")
+    .max(100, "Category name cannot exceed 100 characters"),
+  status: z.enum(["ACTIVE", "INACTIVE"]),
+});
 
-// Sample parent categories for the dropdown
-const parentCategories = [
-  { id: "CAT-004", name: "Clothing" },
-  { id: "CAT-007", name: "Home & Kitchen" },
-]
+// Type inference from the schema
+type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 
-export default function EditCategoryPage({ params }: { params: { id: string } }) {
-  const [imagePreview, setImagePreview] = useState<string | null>(category.image)
-  const router = useRouter()
-  const { toast } = useToast()
+export default function CategoryEditPage() {
+  const params = useParams();
+  const router = useRouter();
+  const [category, setCategory] = useState<CategoriesModel | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<"1:1" | "4:3">("1:1");
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  // Initialize form with Zod validation
+  const form = useForm<CategoryFormValues>({
+    resolver: zodResolver(categoryFormSchema),
     defaultValues: {
-      name: category.name,
-      slug: category.slug,
-      description: category.description,
-      parentCategory: category.parentCategory || "",
-      isActive: category.isActive,
-      isFeatured: category.featured,
+      name: "",
+      status: "ACTIVE",
     },
-  })
+  });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values)
-    toast({
-      title: "Category updated",
-      description: "Your category has been updated successfully.",
-    })
-    router.push(`/dashboard/categories/${params.id}`)
+  // Toggle aspect ratio
+  const toggleAspectRatio = () => {
+    setAspectRatio((prev) => (prev === "1:1" ? "4:3" : "1:1"));
+  };
+
+  useEffect(() => {
+    const fetchCategoryDetails = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getCategoriesByIdService(Number(params.id));
+        setCategory(response);
+
+        // Set form values
+        form.reset({
+          name: response.name,
+          status: response.status,
+        });
+
+        // Set image preview
+        if (response.image && response.image.url) {
+          const imageUrl = `${BASE_URL_API}${response.image.url}`;
+          setImagePreview(imageUrl);
+          setOriginalImageUrl(imageUrl);
+        }
+      } catch (err) {
+        toast.error("Unable to load category information");
+        console.error(err);
+        router.push("/dashboard/categories");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCategoryDetails();
+  }, [params.id, form, router]);
+
+  // Handle image file selection
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    const fileType = file.type.toLowerCase();
+
+    if (!validTypes.includes(fileType)) {
+      setImageError("Invalid file type. Only JPG, PNG, and WebP are supported");
+      return;
+    }
+
+    // Check file size (5MB limit)
+    if (file.size > compareImageSize) {
+      setImageError("Image size exceeds 5MB limit");
+      return;
+    }
+
+    setImageFile(file);
+    setImageError(null);
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        setImagePreview(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Trigger file input click
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Reset image to original
+  const resetImage = () => {
+    setImagePreview(originalImageUrl);
+    setImageFile(null);
+    setImageError(null);
+  };
+
+  // Handle the form submission
+  const onSubmit = async (values: CategoryFormValues) => {
+    if (!category) {
+      toast.error("Category data not found");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      // Check if an image was uploaded
+      if (imageFile) {
+        // Handle image upload and category update together
+        const base64Image = await convertToBase64(imageFile);
+        const imageType = getImageType(imageFile);
+
+        // Update category with new image
+        const response = await updateCategoriesService(category.id, {
+          ...values,
+          image: {
+            base64Image: base64Image,
+            imageType: imageType,
+          },
+        });
+
+        if (response) {
+          toast.success("Category updated successfully");
+          router.push(`/dashboard/categories/${params.id}`);
+        } else {
+          toast.error("Failed to update category");
+        }
+      } else {
+        // Update category without changing the image
+        const response = await updateCategoriesService(category.id, values);
+
+        if (response) {
+          toast.success("Category updated successfully");
+          router.push(`/dashboard/categories/${params.id}`);
+        } else {
+          toast.error("Failed to update category");
+        }
+      }
+    } catch (error) {
+      console.error("Error during submission:", error);
+      toast.error("An error occurred during submission");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return <Loading />;
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
+  if (!category) {
+    return (
+      <div className="p-4 text-center text-red-500">
+        Error loading category data
+      </div>
+    );
   }
 
   return (
@@ -101,52 +225,151 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
           <Button variant="outline" size="icon" asChild>
             <Link href={`/dashboard/categories/${params.id}`}>
               <ArrowLeft className="h-4 w-4" />
-              <span className="sr-only">Back to category</span>
+              <span className="sr-only">Back to category details</span>
             </Link>
           </Button>
           <h2 className="text-3xl font-bold tracking-tight">Edit Category</h2>
         </div>
-        <Button variant="destructive">
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete Category
-        </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Category Information</CardTitle>
-            <CardDescription>Edit the category details.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="grid gap-6 md:grid-cols-2"
+        >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Category Image</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={toggleAspectRatio}
+                className="flex items-center gap-1"
+              >
+                <CropIcon className="h-4 w-4" />
+                {aspectRatio}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-6">
+                  {imagePreview ? (
+                    <div
+                      className={`relative ${
+                        aspectRatio === "1:1" ? "aspect-square" : "aspect-[4/3]"
+                      } w-full overflow-hidden rounded-lg`}
+                    >
+                      <img
+                        src={imagePreview}
+                        alt="Category preview"
+                        className="h-full w-full object-cover"
+                      />
+                      <div className="absolute right-2 top-2 flex gap-2">
+                        {imageFile && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={resetImage}
+                            disabled={isSubmitting}
+                            type="button"
+                          >
+                            Reset
+                          </Button>
+                        )}
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleUploadClick}
+                          disabled={isSubmitting}
+                          type="button"
+                        >
+                          Change Image
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+                        <AlertCircle className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-medium">
+                          No image currently set
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Drag and drop your category image here or click to
+                          upload
+                        </p>
+                      </div>
+                      {/* Hidden file input */}
+                      <Input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handleImageChange}
+                        disabled={isSubmitting}
+                      />
+                      {/* Visible button that triggers the file input */}
+                      <Button
+                        variant="secondary"
+                        className="gap-2"
+                        disabled={isSubmitting}
+                        type="button"
+                        onClick={handleUploadClick}
+                      >
+                        <UploadCloud className="h-4 w-4" />
+                        <span>Upload Image</span>
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                {imageError && (
+                  <div className="rounded-md bg-red-50 p-3 flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-red-800">{imageError}</p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Image Requirements</h3>
+                  <ul className="list-inside list-disc text-sm text-muted-foreground">
+                    <li>File formats: JPG, PNG, or WebP</li>
+                    <li>Maximum file size: 5MB</li>
+                    <li>Recommended aspect ratio: {aspectRatio}</li>
+                    <li>
+                      Minimum resolution:{" "}
+                      {aspectRatio === "1:1" ? "400 x 400" : "400 x 300"} pixels
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Category Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
                 <FormField
                   control={form.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>Category Name*</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter category name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="slug"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Slug</FormLabel>
-                      <FormControl>
-                        <Input placeholder="category-slug" {...field} />
+                        <Input
+                          placeholder="Enter category name"
+                          disabled={isSubmitting}
+                          {...field}
+                        />
                       </FormControl>
                       <FormDescription>
-                        The slug is used in the URL for this category. It should contain only lowercase letters,
-                        numbers, and hyphens.
+                        Enter a name for the category (required).
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -155,159 +378,53 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
 
                 <FormField
                   control={form.control}
-                  name="description"
+                  name="status"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel>Active Status</FormLabel>
+                        <FormDescription>
+                          Toggle whether this category is active or inactive.
+                        </FormDescription>
+                      </div>
                       <FormControl>
-                        <Textarea
-                          placeholder="Enter category description (optional)"
-                          className="resize-none"
-                          {...field}
+                        <Switch
+                          checked={field.value === "ACTIVE"}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked ? "ACTIVE" : "INACTIVE");
+                          }}
+                          disabled={isSubmitting}
                         />
                       </FormControl>
-                      <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="parentCategory"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Parent Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a parent category (optional)" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">None (Main Category)</SelectItem>
-                          {parentCategories.map((category) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>Leave empty to create a main category.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="isActive"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Active Status</FormLabel>
-                          <FormDescription>Make this category visible on the store.</FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="isFeatured"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Featured</FormLabel>
-                          <FormDescription>Show this category in featured sections.</FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" type="button" asChild>
-                    <Link href={`/dashboard/categories/${params.id}`}>Cancel</Link>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() =>
+                      router.push(`/dashboard/categories/${params.id}`)
+                    }
+                    disabled={isSubmitting}
+                  >
+                    Cancel
                   </Button>
-                  <Button type="submit" className="gap-1">
-                    <Save className="h-4 w-4" />
-                    Save Changes
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Updating..." : "Update Category"}
                   </Button>
                 </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Category Image</CardTitle>
-            <CardDescription>Update the category image.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed p-6">
-                {imagePreview ? (
-                  <div className="relative aspect-square w-40 overflow-hidden rounded-lg">
-                    <Image
-                      src={imagePreview || "/placeholder.svg"}
-                      alt="Category preview"
-                      fill
-                      className="object-cover"
-                    />
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="absolute right-2 top-2"
-                      onClick={() => setImagePreview(null)}
-                    >
-                      Change Image
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-                      <UploadCloud className="h-10 w-10 text-muted-foreground" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-medium">Drag and drop your category image here</p>
-                      <p className="text-xs text-muted-foreground">Recommended size: 512 x 512 pixels</p>
-                    </div>
-                    <Button variant="secondary" className="gap-2">
-                      <UploadCloud className="h-4 w-4" />
-                      <span>Upload Image</span>
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        className="absolute inset-0 cursor-pointer opacity-0"
-                        onChange={handleImageChange}
-                      />
-                    </Button>
-                  </>
-                )}
               </div>
-
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium">Image Requirements</h3>
-                <ul className="list-inside list-disc text-sm text-muted-foreground">
-                  <li>File formats: JPG, PNG, or WebP</li>
-                  <li>Maximum file size: 1MB</li>
-                  <li>Recommended aspect ratio: 1:1 (square)</li>
-                  <li>Minimum dimensions: 512 x 512 pixels</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </form>
+      </Form>
     </div>
-  )
+  );
 }
-

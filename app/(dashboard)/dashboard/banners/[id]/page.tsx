@@ -19,7 +19,10 @@ import { toast } from "sonner";
 import { axiosClientWithAuth } from "@/utils/axios";
 import ImageMe from "@/components/shared/images/image_me";
 import { BASE_URL_API } from "@/constants/api/route-api";
-import { deleteBannerService } from "@/services/dashboard/banner.service";
+import {
+  deleteBannerService,
+  getBannerByIdService,
+} from "@/services/dashboard/banner.service";
 import ConfirmDialog from "@/components/shared/modal/confirm-action";
 import { BannerModel } from "@/models/dashboard/banner/banner.model";
 import Laoding from "@/components/shared/loading/laoding";
@@ -36,10 +39,8 @@ export default function BannerDetailPage() {
     const fetchBannerDetails = async () => {
       try {
         setIsLoading(true);
-        const response = await axiosClientWithAuth.get(
-          `/v1/banner/${params.id}`
-        );
-        setBanner(response.data.data);
+        const response = await getBannerByIdService(Number(params.id));
+        setBanner(response);
       } catch (err) {
         setError("Failed to fetch banner details");
         toast.error("Unable to load banner information");
@@ -116,7 +117,7 @@ export default function BannerDetailPage() {
           </CardHeader>
           <CardContent>
             <ImageMe
-              imageUrl={BASE_URL_API + banner.imageUrl}
+              imageUrl={BASE_URL_API + banner.image.url}
               alt={banner.description}
               className="h-56"
             />

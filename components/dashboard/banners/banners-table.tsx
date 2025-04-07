@@ -39,8 +39,7 @@ import {
   getAllBannerAdminService,
   updateBannerService,
 } from "@/services/dashboard/banner.service";
-import { BANNER_STATUS, STATUS_OPTIONS } from "../../../constants/enum/status";
-// import { toast } from "sonner";
+import { DATA_STATUS, STATUS_OPTIONS } from "../../../constants/enum/status";
 import {
   BannerModel,
   BannerPaginationModel,
@@ -52,7 +51,7 @@ import { bannerAdminTableHeader } from "@/constants/tables/banner";
 import { DateTimeFormat } from "@/utils/date/date-time-format";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/shared/modal/confirm-action";
-import { set } from "date-fns";
+import { Constants } from "@/constants/key/constant";
 
 export function BannersTable() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,15 +70,14 @@ export function BannersTable() {
 
       const response = await getAllBannerAdminService({
         search: searchQuery,
-        status: statusFilter === "ALL" ? undefined : statusFilter,
+        status: statusFilter === Constants.ALL ? undefined : statusFilter,
         ...param,
       });
 
       if (response) {
         setBannerData(response);
       } else {
-        console.error("Failed to fetch users:");
-        toast.error("Failed to load users");
+        toast.error("Failed to load banner");
       }
       setIsLoading(false);
     },
@@ -98,9 +96,9 @@ export function BannersTable() {
           return {
             ...banner,
             status:
-              status === BANNER_STATUS.ACTIVE
-                ? BANNER_STATUS.INACTIVE
-                : BANNER_STATUS.ACTIVE,
+              status === DATA_STATUS.ACTIVE
+                ? DATA_STATUS.INACTIVE
+                : DATA_STATUS.ACTIVE,
           };
         }
         return banner;
@@ -114,9 +112,9 @@ export function BannersTable() {
 
     const resposne = await updateBannerService(bannerId, {
       status:
-        status == BANNER_STATUS.ACTIVE
-          ? BANNER_STATUS.INACTIVE
-          : BANNER_STATUS.ACTIVE,
+        status == DATA_STATUS.ACTIVE
+          ? DATA_STATUS.INACTIVE
+          : DATA_STATUS.ACTIVE,
     });
 
     if (resposne) {
@@ -221,7 +219,7 @@ export function BannersTable() {
                         </TableCell>
                         <TableCell>
                           <ImageMe
-                            imageUrl={BASE_URL_API + banner.imageUrl}
+                            imageUrl={BASE_URL_API + banner.image.url}
                             alt={banner.description}
                             className="w-20 h-12 sm:w-24 sm:h-16"
                           />
@@ -233,7 +231,7 @@ export function BannersTable() {
                         <TableCell>
                           <div className="flex items-center space-x-2">
                             <Switch
-                              checked={banner.status === BANNER_STATUS.ACTIVE}
+                              checked={banner.status === DATA_STATUS.ACTIVE}
                               onCheckedChange={() =>
                                 toggleBannerStatus(banner.id, banner.status)
                               }
@@ -288,12 +286,12 @@ export function BannersTable() {
                                   toggleBannerStatus(banner.id, banner.status)
                                 }
                               >
-                                {banner.status === BANNER_STATUS.ACTIVE ? (
+                                {banner.status === DATA_STATUS.ACTIVE ? (
                                   <Power className="mr-2 h-4 w-4 " />
                                 ) : (
                                   <Power className="mr-2 h-4 w-4 rotate-180" />
                                 )}
-                                {banner.status === BANNER_STATUS.ACTIVE
+                                {banner.status === DATA_STATUS.ACTIVE
                                   ? "Deactivate"
                                   : "Activate"}
                               </DropdownMenuItem>

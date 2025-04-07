@@ -8,13 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import {
-  ImageIcon,
-  UploadCloud,
-  AlertCircle,
-  CheckCircle2,
-  CropIcon,
-} from "lucide-react";
+import { ImageIcon, UploadCloud, AlertCircle, CropIcon } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -174,34 +168,17 @@ const ImageUploadAndBannerSubmission = () => {
 
     try {
       setIsSubmitting(true);
-
-      // Show loading toast
-      const loadingToast = toast.loading("Uploading image...");
-
       const base64Image = await convertToBase64(imageFile);
       const imageType = getImageType(imageFile);
 
-      // Upload the image first
-      const imageResponse = await uploadImageService({
-        base64Image: base64Image,
-        imageType: imageType,
-      });
-
-      if (!imageResponse) {
-        toast.dismiss(loadingToast);
-        toast.error("Failed to upload image");
-        setImageError("Image upload failed");
-        return;
-      }
-
-      // Update toast
-      toast.dismiss(loadingToast);
       toast.loading("Creating banner...");
 
-      // Then create the banner with the image URL
       const bannerResponse = await createBannerService({
         description: values.description,
-        imageUrl: imageResponse.url,
+        image: {
+          base64Image: base64Image,
+          imageType: imageType,
+        },
         status: values.status,
       });
 
@@ -215,7 +192,6 @@ const ImageUploadAndBannerSubmission = () => {
       toast.dismiss();
       toast.success("Banner created successfully");
 
-      // Reset and redirect
       resetForm();
       router.push("/dashboard/banners");
     } catch (error) {
