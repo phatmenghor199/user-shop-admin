@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 import { Trash, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import { BASE_URL_API } from "@/constants/api/route-api"; // Import BASE_URL_API
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export interface SizeFormValues {
   mainImage: SizeVariantImageData | null;
   additionalImages: SizeVariantImageData[];
   isNew?: boolean;
+  removedAdditionalImageIds?: string[]; // For tracking deleted images
 }
 
 interface SizeVariantProps {
@@ -94,6 +96,7 @@ export function SizeVariantComponent({
           base64Image: base64,
           imageType: imageType,
           preview: reader.result, // This is definitely a string here
+          isExisting: false, // Mark as new upload
         });
       }
     };
@@ -146,6 +149,7 @@ export function SizeVariantComponent({
             base64Image: base64,
             imageType: imageType,
             preview: reader.result,
+            isExisting: false, // Mark as new upload
           });
         }
       };
@@ -194,6 +198,11 @@ export function SizeVariantComponent({
       onUpdate(index, "discountEndDate", endDate);
     }
   }, [endDate, index, onUpdate, size.discountEndDate]);
+
+  // Function to get the correct image source with BASE_URL_API for existing images
+  const getImageSrc = (image: SizeVariantImageData) => {
+    return image.isExisting ? `${BASE_URL_API}${image.preview}` : image.preview;
+  };
 
   return (
     <div className="rounded-lg border p-4">
@@ -339,7 +348,7 @@ export function SizeVariantComponent({
               {size.mainImage ? (
                 <div className="relative w-full h-full">
                   <img
-                    src={size.mainImage.preview}
+                    src={getImageSrc(size.mainImage)}
                     alt={`Size ${size.size || index + 1} main image`}
                     className="object-cover w-full h-full"
                   />
@@ -395,7 +404,7 @@ export function SizeVariantComponent({
                   className="relative aspect-square overflow-hidden rounded-md border"
                 >
                   <img
-                    src={image.preview}
+                    src={getImageSrc(image)}
                     alt={`Size ${size.size || index + 1} additional image ${
                       imgIndex + 1
                     }`}

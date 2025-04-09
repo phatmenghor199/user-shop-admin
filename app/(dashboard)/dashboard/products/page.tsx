@@ -33,12 +33,6 @@ export default function ProductsPage() {
       </div>
 
       <ProductsTable />
-
-      <div className="text-xs text-muted-foreground mt-4">
-        Showing products with their current inventory and promotion status.
-        Products with active promotions will display both original and
-        discounted prices.
-      </div>
     </div>
   );
 }

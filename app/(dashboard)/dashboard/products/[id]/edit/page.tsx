@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { ArrowLeft, Save, X, Plus, Trash, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Save, X, Plus, AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -45,21 +45,32 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CategorySelector } from "@/components/dashboard/products/category-selector";
 import { toast } from "sonner";
 import {
+  addProductSizeService,
   getProductByIdService,
   removeProductSizeService,
   updateProductAdminService,
+  updateProductSizeService,
+  updateProductMainImageService,
+  addProductAdditionalImagesService,
+  removeProductAdditionalImageService,
+  updateProductSizeMainImageService,
+  addProductSizeAdditionalImagesService,
+  removeProductSizeAdditionalImageService,
+  resetProductDiscountService,
 } from "@/services/dashboard/product.service";
 import {
   SizeFormValues,
+  SizeVariantComponent,
   SizeVariantImageData,
 } from "@/components/dashboard/products/size-variant-component";
 import { CreateProductModel } from "@/models/dashboard/product/create-product.model";
 import { SizeUpdateModel } from "@/models/dashboard/product/size-update.model";
+import { BASE_URL_API } from "@/constants/api/route-api";
+import ConfirmDialog from "@/components/shared/modal/confirm-action";
 
 // Define enums matching the backend
 const StatusData = {
@@ -104,23 +115,20 @@ interface ImageData {
   isExisting?: boolean;
 }
 
-// This is a page component that receives productId as a parameter
-interface PageProps {
-  params: {
-    productId: string;
-  };
-}
-
-export default function EditProductPage({ params }: PageProps) {
-  const productId = params.productId;
+export default function EditProductPage() {
+  const params = useParams();
   const [mainImage, setMainImage] = useState<ImageData | null>(null);
   const [additionalImages, setAdditionalImages] = useState<ImageData[]>([]);
+  const [removedAdditionalImageIds, setRemovedAdditionalImageIds] = useState<
+    string[]
+  >([]);
   const [sizeVariants, setSizeVariants] = useState<SizeFormValues[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [sizeToDelete, setSizeToDelete] = useState<number | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeletePromotion, setIsDeletepromotion] = useState(false);
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const additionalFileInputRef = useRef<HTMLInputElement>(null);
@@ -153,12 +161,12 @@ export default function EditProductPage({ params }: PageProps) {
         setErrorMsg(null);
 
         // Fetch product details
-        const productResponse = await getProductByIdService(Number(productId));
-        if (!productResponse || !productResponse.data) {
+        const productResponse = await getProductByIdService(Number(params.id));
+        if (!productResponse) {
           throw new Error("Failed to fetch product data");
         }
 
-        const productData = productResponse.data;
+        const productData = productResponse;
 
         // Set form values
         form.reset({
@@ -192,7 +200,7 @@ export default function EditProductPage({ params }: PageProps) {
           productData.additionalImages.length > 0
         ) {
           setAdditionalImages(
-            productData.additionalImages.map((img) => ({
+            productData.additionalImages.map((img: ImageData) => ({
               id: img.id,
               preview: `${img.url}`,
               url: img.url,
@@ -203,7 +211,7 @@ export default function EditProductPage({ params }: PageProps) {
 
         // Set size variants if available
         if (productData.sizes && productData.sizes.length > 0) {
-          const sizes = productData.sizes.map((size) => {
+          const sizes = productData.sizes.map((size: SizeFormValues) => {
             const sizeVariant: SizeFormValues = {
               id: size.id,
               size: size.size,
@@ -229,6 +237,7 @@ export default function EditProductPage({ params }: PageProps) {
                     isExisting: true,
                   }))
                 : [],
+              removedAdditionalImageIds: [],
             };
             return sizeVariant;
           });
@@ -247,7 +256,7 @@ export default function EditProductPage({ params }: PageProps) {
     };
 
     fetchProductData();
-  }, [productId, form]);
+  }, [params.id, form]);
 
   // Toggle for size variants with proper handling
   useEffect(() => {
@@ -272,6 +281,7 @@ export default function EditProductPage({ params }: PageProps) {
         mainImage: mainImage,
         additionalImages: [...additionalImages],
         isNew: true,
+        removedAdditionalImageIds: [],
       };
 
       setSizeVariants([newSizeVariant]);
@@ -296,23 +306,9 @@ export default function EditProductPage({ params }: PageProps) {
         mainImage: null,
         additionalImages: [],
         isNew: true,
+        removedAdditionalImageIds: [],
       },
     ]);
-  };
-
-  // Remove a size variant
-  const removeSizeVariant = async (index: number) => {
-    const variant = sizeVariants[index];
-
-    // If it's a new variant that hasn't been saved to the server
-    if (variant.isNew || !variant.id) {
-      setSizeVariants(sizeVariants.filter((_, i) => i !== index));
-      return;
-    }
-
-    // For existing variants, we need to confirm and then call the API
-    setSizeToDelete(index);
-    setIsDeleteDialogOpen(true);
   };
 
   // Handle confirmed size deletion
@@ -331,7 +327,7 @@ export default function EditProductPage({ params }: PageProps) {
     try {
       setIsLoading(true);
       const response = await removeProductSizeService(
-        Number(productId),
+        Number(params.id),
         variant.id
       );
 
@@ -402,9 +398,23 @@ export default function EditProductPage({ params }: PageProps) {
     imageIndex: number
   ) => {
     const updatedVariants = [...sizeVariants];
+    const imageToRemove =
+      updatedVariants[variantIndex].additionalImages[imageIndex];
+
+    // If the image is existing (has an ID), add it to the removedAdditionalImageIds array
+    if (imageToRemove.isExisting && imageToRemove.id) {
+      if (!updatedVariants[variantIndex].removedAdditionalImageIds) {
+        updatedVariants[variantIndex].removedAdditionalImageIds = [];
+      }
+      updatedVariants[variantIndex].removedAdditionalImageIds.push(
+        imageToRemove.id
+      );
+    }
+
     updatedVariants[variantIndex].additionalImages = updatedVariants[
       variantIndex
     ].additionalImages.filter((_, i) => i !== imageIndex);
+
     setSizeVariants(updatedVariants);
   };
 
@@ -504,6 +514,13 @@ export default function EditProductPage({ params }: PageProps) {
 
   // Handle removing an additional image
   const handleRemoveAdditionalImage = (index: number) => {
+    const imageToRemove = additionalImages[index];
+
+    // If the image is existing (has an ID), add it to the removedAdditionalImageIds array
+    if (imageToRemove.isExisting && imageToRemove.id) {
+      setRemovedAdditionalImageIds((prev) => [...prev, imageToRemove.id!]);
+    }
+
     setAdditionalImages((images) => images.filter((_, i) => i !== index));
   };
 
@@ -565,8 +582,87 @@ export default function EditProductPage({ params }: PageProps) {
         }
       }
 
-      // Validate size variants if enabled
+      // Prepare the request payload
+      const productData: CreateProductModel = {
+        name: values.name,
+        description: values.description,
+        price: values.price,
+        categoryId: parseInt(values.categoryId),
+        status: values.status,
+      };
+
+      // Add discount fields if both type and value are provided
+      if (
+        values.discountType &&
+        values.discountType !== "NONE" &&
+        values.discountValue !== null
+      ) {
+        productData.discountType = values.discountType;
+        productData.discountValue = values.discountValue;
+
+        // Add date range only if both dates are provided
+        if (values.discountStartDate && values.discountEndDate) {
+          productData.discountStartDate = values.discountStartDate;
+          productData.discountEndDate = values.discountEndDate;
+        }
+      }
+
+      console.log("Submitting product update:", productData);
+
+      // Update the base product first
+      const response = await updateProductAdminService(
+        Number(params.id),
+        productData
+      );
+
+      if (!response) {
+        toast.error("Failed to update product");
+        setIsLoading(false);
+        return;
+      }
+
+      // Remove all existing sizes
+      const existingProduct = await getProductByIdService(Number(params.id));
+      if (existingProduct?.sizes && existingProduct.sizes.length > 0) {
+        for (const size of existingProduct.sizes) {
+          await removeProductSizeService(Number(params.id), size.id);
+        }
+      }
+
+      // Handle image updates separately using dedicated endpoints
+      if (!hasSizeVariants) {
+        // Update main image if it's changed (has base64Image)
+        if (mainImage?.base64Image) {
+          await updateProductMainImageService(Number(params.id), {
+            base64Image: mainImage.base64Image,
+            imageType: mainImage.imageType || "jpeg",
+          });
+        }
+
+        // Handle new additional images
+        const newAdditionalImages = additionalImages.filter(
+          (img) => img.base64Image
+        );
+        if (newAdditionalImages.length > 0) {
+          const imagesData = newAdditionalImages.map((img) => ({
+            base64Image: img.base64Image || "",
+            imageType: img.imageType || "jpeg",
+          }));
+          await addProductAdditionalImagesService(
+            Number(params.id),
+            imagesData
+          );
+        }
+
+        // Remove deleted additional images
+        for (const imageId of removedAdditionalImageIds) {
+          await removeProductAdditionalImageService(Number(params.id), imageId);
+        }
+      }
+
+      // Handle size variants if enabled
       if (hasSizeVariants) {
+        // Validate size variants
         if (sizeVariants.length === 0) {
           toast.error("Please add at least one size variant");
           setIsLoading(false);
@@ -620,127 +716,85 @@ export default function EditProductPage({ params }: PageProps) {
             return;
           }
         }
-      }
 
-      // Prepare the request payload
-      const productData: CreateProductModel = {
-        name: values.name,
-        description: values.description,
-        price: values.price,
-        categoryId: parseInt(values.categoryId),
-        status: values.status,
-      };
+        // Tracking added size variant IDs
+        const addedSizeVariantIds: number[] = [];
 
-      // Add main product images if not using size variants or if we're updating the base product
-      if (!hasSizeVariants) {
-        // Only include image if it's a new upload (has base64Image)
-        if (mainImage?.base64Image) {
-          productData.image = {
-            base64Image: mainImage.base64Image,
-            imageType: mainImage.imageType || "jpeg",
-          };
-        }
+        // Prepare an array of size data
+        const sizesData: SizeUpdateModel[] = sizeVariants.map((variant) => ({
+          size: variant.size,
+          price: variant.price,
+          status: variant.status,
+          ...(variant.discountType &&
+          variant.discountType !== "NONE" &&
+          variant.discountValue !== null
+            ? {
+                discountType: variant.discountType,
+                discountValue: variant.discountValue,
+                ...(variant.discountStartDate && variant.discountEndDate
+                  ? {
+                      discountStartDate: variant.discountStartDate,
+                      discountEndDate: variant.discountEndDate,
+                    }
+                  : {}),
+              }
+            : {}),
+        }));
 
-        // Handle additional images - only include new uploads
-        const newAdditionalImages = additionalImages.filter(
-          (img) => img.base64Image
+        // Create new sizes
+        const sizeResponse = await addProductSizeService(
+          Number(params.id),
+          sizesData
         );
-        if (newAdditionalImages.length > 0) {
-          productData.additionalImages = newAdditionalImages.map((img) => ({
-            base64Image: img.base64Image || "",
-            imageType: img.imageType || "jpeg",
-          }));
-        }
 
-        // Add discount fields if both type and value are provided
-        if (
-          values.discountType &&
-          values.discountType !== "NONE" &&
-          values.discountValue !== null
-        ) {
-          productData.discountType = values.discountType;
-          productData.discountValue = values.discountValue;
+        // Process each added size variant
+        const addedSizes = sizeResponse?.data?.sizes || [];
 
-          // Add date range only if both dates are provided
-          if (values.discountStartDate && values.discountEndDate) {
-            productData.discountStartDate = values.discountStartDate;
-            productData.discountEndDate = values.discountEndDate;
-          }
-        }
-      }
+        for (let i = 0; i < addedSizes.length; i++) {
+          const newVariantId = addedSizes[i].id;
+          const variant = sizeVariants[i];
 
-      console.log("Submitting product update:", productData);
-
-      // Update the base product first
-      const response = await updateProductAdminService(
-        Number(productId),
-        productData
-      );
-
-      if (!response) {
-        toast.error("Failed to update product");
-        setIsLoading(false);
-        return;
-      }
-
-      // Handle size variants if enabled
-      if (hasSizeVariants) {
-        // Process each size variant
-        for (const variant of sizeVariants) {
-          // Prepare size data
-          const sizeData: SizeUpdateModel = {
-            size: variant.size,
-            price: variant.price,
-            status: variant.status,
-          };
-
-          // Add size discount if applicable
-          if (
-            variant.discountType &&
-            variant.discountType !== "NONE" &&
-            variant.discountValue !== null
-          ) {
-            sizeData.discountType = variant.discountType;
-            sizeData.discountValue = variant.discountValue;
-
-            if (variant.discountStartDate && variant.discountEndDate) {
-              sizeData.discountStartDate = variant.discountStartDate;
-              sizeData.discountEndDate = variant.discountEndDate;
-            }
+          if (!newVariantId) {
+            console.error("Failed to get new size variant ID", sizeResponse);
+            toast.error(`Failed to add size variant: ${variant.size}`);
+            continue;
           }
 
-          // Add size image if it's a new upload
+          // Track the added size variant ID
+          addedSizeVariantIds.push(newVariantId);
+
+          // Update size main image if it exists
           if (variant.mainImage?.base64Image) {
-            sizeData.image = {
-              base64Image: variant.mainImage.base64Image,
-              imageType: variant.mainImage.imageType || "jpeg",
-            };
+            await updateProductSizeMainImageService(
+              Number(params.id),
+              newVariantId,
+              {
+                base64Image: variant.mainImage.base64Image,
+                imageType: variant.mainImage.imageType || "jpeg",
+              }
+            );
           }
 
-          // Add size additional images if they're new uploads
+          // Add new additional images for the size
           const newSizeAdditionalImages = variant.additionalImages.filter(
             (img) => img.base64Image
           );
           if (newSizeAdditionalImages.length > 0) {
-            sizeData.additionalImages = newSizeAdditionalImages.map((img) => ({
+            const imagesData = newSizeAdditionalImages.map((img) => ({
               base64Image: img.base64Image || "",
               imageType: img.imageType || "jpeg",
             }));
-          }
-
-          // Create new size or update existing one
-          if (variant.isNew) {
-            // This is a new size variant
-            await addProductSizeService(Number(productId), sizeData);
-          } else if (variant.id) {
-            // This is an existing size variant
-            await updateProductSizeService(
-              Number(productId),
-              variant.id,
-              sizeData
+            await addProductSizeAdditionalImagesService(
+              Number(params.id),
+              newVariantId,
+              imagesData
             );
           }
         }
+
+        // If additional size operations are needed and weren't handled in the initial
+        // service call, you can add them here using addedSizeVariantIds
+        console.log("Added Size Variant IDs:", addedSizeVariantIds);
       }
 
       toast.success("Product updated successfully");
@@ -755,6 +809,91 @@ export default function EditProductPage({ params }: PageProps) {
       setIsLoading(false);
     }
   };
+
+  const removeSizeVariant = async (index: number) => {
+    const variant = sizeVariants[index];
+
+    // If it's a new variant that hasn't been saved to the server
+    if (variant.isNew || !variant.id) {
+      // If this is the last size variant, reset to non-size variant
+      if (sizeVariants.length === 1) {
+        // Reset size variants and uncheck hasSizeVariants
+        setSizeVariants([]);
+        form.setValue("hasSizeVariants", false);
+
+        // Reset any size-specific fields
+        form.setValue("price", 0);
+        form.setValue("discountType", null);
+        form.setValue("discountValue", null);
+        form.setValue("discountStartDate", null);
+        form.setValue("discountEndDate", null);
+      } else {
+        // Just remove this specific variant
+        setSizeVariants(sizeVariants.filter((_, i) => i !== index));
+      }
+      return;
+    }
+
+    // For existing variants, we need to confirm and then call the API
+    setSizeToDelete(index);
+    setIsDeleteDialogOpen(true);
+  };
+
+  async function resetDiscountProduct() {
+    try {
+      setIsLoading(true);
+      const response = await resetProductDiscountService(Number(params.id));
+      if (response) {
+        // Reset form values related to discount for main product
+        form.setValue("discountType", null);
+        form.setValue("discountValue", null);
+        form.setValue("discountStartDate", null);
+        form.setValue("discountEndDate", null);
+
+        // Reset discount for all size variants
+        const updatedVariants = sizeVariants.map((variant) => {
+          // If the variant has an existing ID, we'll call the update service
+          if (variant.id) {
+            updateProductSizeService(Number(params.id), variant.id, {
+              size: variant.size,
+              price: variant.price,
+              status: variant.status,
+              discountType: null,
+              discountValue: null,
+              discountStartDate: null,
+              discountEndDate: null,
+            }).catch((error) => {
+              console.error(
+                `Error resetting discount for size variant ${variant.size}:`,
+                error
+              );
+            });
+          }
+
+          // Update local state
+          return {
+            ...variant,
+            discountType: null,
+            discountValue: null,
+            discountStartDate: null,
+            discountEndDate: null,
+          };
+        });
+
+        setSizeVariants(updatedVariants);
+        toast.success("Product promotion reset successfully");
+      } else {
+        toast.error("Failed to reset product promotion");
+      }
+    } catch (error) {
+      console.error("Error resetting promotion:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to reset promotion"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   // If we're still loading data, show a loading state
   if (isLoadingData) {
@@ -812,52 +951,39 @@ export default function EditProductPage({ params }: PageProps) {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-6">
-                  <FormField
-                    control={form.control as any}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Product Name*</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter product name" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control as any}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Product Name*</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Enter product name"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control as any}
-                    name="categoryId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Category*</FormLabel>
-                        <CategorySelector
-                          value={field.value}
-                          onChange={field.onChange}
-                        />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control as any}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description*</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Enter product description"
-                            className="min-h-[120px] resize-none"
-                            {...field}
+                    <FormField
+                      control={form.control as any}
+                      name="categoryId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Category*</FormLabel>
+                          <CategorySelector
+                            value={field.value}
+                            onChange={field.onChange}
                           />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FormField
@@ -1112,7 +1238,11 @@ export default function EditProductPage({ params }: PageProps) {
                         {mainImage ? (
                           <div className="relative aspect-square w-full overflow-hidden rounded-md border border-border">
                             <Image
-                              src={mainImage.preview}
+                              src={
+                                mainImage.isExisting
+                                  ? `${BASE_URL_API}${mainImage.preview}`
+                                  : mainImage.preview
+                              }
                               alt="Main product image"
                               fill
                               className="object-cover"
@@ -1194,7 +1324,11 @@ export default function EditProductPage({ params }: PageProps) {
                             className="relative aspect-square overflow-hidden rounded-md border border-border"
                           >
                             <Image
-                              src={image.preview}
+                              src={
+                                image.isExisting
+                                  ? `${BASE_URL_API}${image.preview}`
+                                  : image.preview
+                              }
                               alt={`Additional image ${index + 1}`}
                               fill
                               className="object-cover"
@@ -1269,7 +1403,7 @@ export default function EditProductPage({ params }: PageProps) {
                       onUpdate={updateSizeVariant}
                       onRemove={() => {
                         // Don't allow removing the last size variant
-                        if (sizeVariants.length > 1) {
+                        if (sizeVariants.length > 0) {
                           removeSizeVariant(index);
                         } else {
                           toast.error(
@@ -1277,19 +1411,21 @@ export default function EditProductPage({ params }: PageProps) {
                           );
                         }
                       }}
-                      onImageUpload={(imageData) =>
+                      onImageUpload={(imageData: SizeVariantImageData | null) =>
                         handleSizeVariantMainImageUpload(index, imageData)
                       }
-                      onAdditionalImageUpload={(imageData) =>
+                      onAdditionalImageUpload={(
+                        imageData: SizeVariantImageData
+                      ) =>
                         handleSizeVariantAdditionalImageUpload(index, imageData)
                       }
-                      onAdditionalImageRemove={(imageIndex) =>
+                      onAdditionalImageRemove={(imageIndex: number) =>
                         handleSizeVariantAdditionalImageRemove(
                           index,
                           imageIndex
                         )
                       }
-                      isRemovable={sizeVariants.length > 1}
+                      isRemovable={sizeVariants.length > 0}
                     />
                   ))}
 
@@ -1307,51 +1443,56 @@ export default function EditProductPage({ params }: PageProps) {
             </Card>
           )}
 
-          <div className="mt-6 flex justify-end gap-3 sticky bottom-0 bg-background py-4 border-t z-10">
+          <div className="mt-6 flex justify-between gap-3 sticky bottom-0 bg-background py-4 border-t z-10">
             <Button
-              variant="outline"
+              variant="destructive"
               type="button"
-              asChild
               disabled={isLoading}
+              onClick={() => setIsDeletepromotion(true)}
             >
-              <Link href="/dashboard/products">Cancel</Link>
+              Reset Promotion
             </Button>
-            <Button type="submit" className="gap-1" disabled={isLoading}>
-              <Save className="h-4 w-4" />
-              {isLoading ? "Saving..." : "Save Changes"}
-            </Button>
+
+            <div className="gap-3 flex items-center">
+              <Button
+                variant="outline"
+                type="button"
+                asChild
+                disabled={isLoading}
+              >
+                <Link href="/dashboard/products">Cancel</Link>
+              </Button>
+              <Button type="submit" className="gap-1" disabled={isLoading}>
+                <Save className="h-4 w-4" />
+                {isLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
           </div>
         </form>
       </Form>
 
       {/* Size variant deletion confirmation dialog */}
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove Size Variant</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove this size variant? This action
-              cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault(); // Prevent dialog from closing automatically
-                handleConfirmSizeDelete();
-              }}
-              disabled={isLoading}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isLoading ? "Removing..." : "Remove Size"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        title="Remove Size Variant"
+        description="Are you sure you want to remove this size variant? This action cannot be undone."
+        confirmLabel="Remove Size"
+        variant="danger"
+        onConfirm={handleConfirmSizeDelete}
+        showIcon={true}
+      />
+
+      <ConfirmDialog
+        isOpen={isDeletePromotion}
+        onClose={() => setIsDeletepromotion(false)}
+        title="Remove Product promotion"
+        description="Are you sure you want to remove product promotion? This action cannot be undone."
+        confirmLabel="Remove promotion"
+        variant="danger"
+        onConfirm={resetDiscountProduct}
+        showIcon={true}
+      />
     </div>
   );
 }
