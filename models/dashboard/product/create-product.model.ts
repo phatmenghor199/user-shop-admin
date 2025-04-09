@@ -1,9 +1,9 @@
 export interface CreateProductModel {
-  name: string;
+  name?: string;
   price?: number;
   description?: string;
-  categoryId: number;
-  status: string;
+  categoryId?: number;
+  status?: string;
   discountType?: string;
   discountValue?: number;
   discountStartDate?: string;
@@ -20,13 +20,13 @@ interface Image {
 
 interface Size {
   id?: number;
-  size: string;
-  price: number;
+  size?: string;
+  price?: number;
   discountType?: string;
   discountValue?: number;
   discountStartDate?: string;
   discountEndDate?: string;
   image?: Image;
   additionalImages?: Image[];
-  status: string;
+  status?: string;
 }
