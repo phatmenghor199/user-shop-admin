@@ -11,9 +11,7 @@ import {
   Power,
   Edit,
 } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,7 +38,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import ImageMe from "@/components/shared/images/image_me";
 import ConfirmDialog from "@/components/shared/modal/confirm-action";
 import PaginationPage from "@/components/shared/pagination/pagination-page";
@@ -62,15 +59,6 @@ const STATUS_OPTIONS = [
   { value: "ALL", label: "All Status" },
   { value: "ACTIVE", label: "Active" },
   { value: "INACTIVE", label: "Inactive" },
-];
-
-// Category options for filter - replace with actual categories
-const CATEGORY_OPTIONS = [
-  { value: 0, label: "All Categories" },
-  { value: 1, label: "Electronics" },
-  { value: 2, label: "Clothing" },
-  { value: 3, label: "Accessories" },
-  { value: 4, label: "Home" },
 ];
 
 export function ProductsTable() {
