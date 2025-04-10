@@ -1,10 +1,30 @@
+// app/layout.tsx
 import type React from "react";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Noto_Sans_TC, Nokora } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
+import { AppProviders } from "./auth-provider";
 
-const inter = Inter({ subsets: ["latin"] });
+// Font definitions
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const notoSansTC = Noto_Sans_TC({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  display: "swap",
+  variable: "--font-noto-sans-tc",
+});
+
+const nokora = Nokora({
+  subsets: ["khmer"],
+  weight: ["400", "700"],
+  display: "swap",
+  variable: "--font-nokora",
+});
 
 export const metadata: Metadata = {
   title: "Smart Shop Admin",
@@ -19,20 +39,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-          <Toaster />
-        </ThemeProvider>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      </head>
+      <body
+        className={`${inter.variable} ${notoSansTC.variable} ${nokora.variable} antialiased`}
+      >
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );
 }
-
-import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";

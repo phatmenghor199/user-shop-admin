@@ -52,10 +52,10 @@ import {
 } from "@/models/dashboard/product/product.model";
 import {
   deleteProductAdminService,
-  FilterProductParams,
   getAllProductAdminService,
   updateProductAdminService,
 } from "@/services/dashboard/product.service";
+import { FilterProductParams } from "@/models/dashboard/product/size-update.model";
 
 // Constants
 const STATUS_OPTIONS = [
