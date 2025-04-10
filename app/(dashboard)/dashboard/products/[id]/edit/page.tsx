@@ -1032,7 +1032,7 @@ export default function EditProductPage() {
   }
 
   return (
-    <div className="container-fluid pb-12">
+    <div className=" w-full pb-12">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" asChild>
@@ -1550,7 +1550,7 @@ export default function EditProductPage() {
             </Card>
           )}
 
-          <div className="mt-6 flex justify-between gap-3 sticky bottom-0 bg-background py-4 border-t z-10">
+          <div className="mt-6 flex justify-between gap-3 bg-background py-4 border-t sticky bottom-0 z-10">
             <Button
               variant="destructive"
               type="button"

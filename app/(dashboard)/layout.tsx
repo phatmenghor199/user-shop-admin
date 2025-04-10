@@ -33,7 +33,7 @@ export default function DashboardLayout({
   }, [isMobile]);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       <DashboardSidebar
         isOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -45,8 +45,9 @@ export default function DashboardLayout({
         )}
       >
         <TopBar onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
+        {/* Changed to have only one scrollable container */}
         <main className="flex-1 overflow-y-auto px-4 pt-4 md:pt-6 md:px-6">
-          <div className="h-full">{children}</div>
+          {children}
         </main>
       </div>
     </div>

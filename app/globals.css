@@ -123,12 +123,12 @@
   }
 }
 
-/* Enhanced scrollbar styles */
+/* Fix for nested scrolling issues */
 @layer utilities {
-  /* Custom scrollbar for webkit browsers with better visibility */
+  /* Enhanced scrollbar styles */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
   }
 
   ::-webkit-scrollbar-track {
@@ -145,43 +145,61 @@
     background: hsl(var(--primary) / 0.6);
   }
 
-  /* Firefox scrollbar customization */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
-  }
-
-  /* Smooth scrolling for the whole document and all scrollable elements */
+  /* Force a single scrollbar pattern */
+  body,
   html {
-    scroll-behavior: smooth;
+    overflow: hidden;
+    height: 100%;
   }
 
-  /* Fix for nested scrolling issues */
-  .smooth-scroll {
-    overflow-y: auto;
-    overflow-x: hidden;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch; /* For iOS momentum scrolling */
+  /* Specific dashboard fixes */
+  .dashboard-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
   }
 
-  /* Style scrollable containers */
-  .scrollable-container {
+  .dashboard-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .dashboard-main {
+    flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
-    /* Padding to avoid content being hidden under scrollbar */
-    padding-right: 0.25rem;
-    /* Optional: add a background to indicate scrollable area */
-    background: hsl(var(--background) / 0.6);
-    border-radius: var(--radius);
   }
 
-  /* Enhanced focus rings for light mode */
-  :root:not(.dark) .focus-visible:focus-visible {
-    @apply ring-2 ring-primary/90 ring-offset-2 ring-offset-background;
-    outline: none;
+  /* Fix for form pages with lots of content */
+  .long-form-container {
+    /* Remove any fixed height that might cause overflow */
+    height: auto;
+    /* Allow content to determine height */
+    min-height: calc(100% - 60px); /* Adjust for footer height */
   }
+
+  /* Sticky footer for forms */
+  .form-sticky-footer {
+    position: sticky;
+    bottom: 0;
+    background-color: hsl(var(--background));
+    border-top: 1px solid hsl(var(--border));
+    padding: 1rem 0;
+    margin-top: 1.5rem;
+    z-index: 10;
+  }
+}
+.main-content-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: calc(100vh - 64px); /* Adjust based on your header height */
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Improved card and container shadows */

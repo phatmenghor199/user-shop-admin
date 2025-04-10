@@ -13,14 +13,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ProductsTable } from "@/components/dashboard/products/products-table";
+import { useTranslation } from "@/language/translation-provider";
 
 export default function ProductsPage() {
-  const [view, setView] = useState<string>("all");
+  const { t } = useTranslation();
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Products</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          {t("app.products")}
+        </h1>
 
         <div className="flex items-center gap-2">
           <Button asChild>
