@@ -5,7 +5,7 @@
 
 @layer base {
   :root {
-    /* Updated light mode colors for better readability */
+    /* Enhanced light mode colors with better contrast and line quality */
     --background: 210 40% 98%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
@@ -22,15 +22,15 @@
     --accent-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
+    --border: 214 32% 65%; /* Darker border color for better visibility */
+    --input: 214 32% 81%;
     --ring: 221 83% 53%;
     --chart-1: 221 83% 53%;
     --chart-2: 340 82% 52%;
     --chart-3: 145 63% 42%;
     --chart-4: 43 96% 58%;
     --chart-5: 261 51% 51%;
-    --radius: 0.5rem;
+    --radius: 0.4rem;
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 221 83% 53%;
@@ -40,50 +40,66 @@
     --sidebar-border: 217 33% 17%;
     --sidebar-ring: 221 83% 53%;
 
-    /* Scroll bar colors */
-    --scrollbar-thumb: 214 20% 69%;
+    /* Improved scroll bar colors */
+    --scrollbar-thumb: 214 20% 59%;
     --scrollbar-track: 210 40% 96%;
+
+    /* Shadow variables for enhanced depth */
+    --shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.06),
+      0 1px 2px -1px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08),
+      0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.07),
+      0 4px 6px -4px rgba(0, 0, 0, 0.05);
   }
 
   .dark {
-    /* Updated dark mode colors to match Claude AI dark mode */
+    /* Enhanced dark mode colors with better line visibility and contrast */
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
-    --card: 223 47% 14%;
+    --card: 223 47% 15%; /* Slightly lighter for better contrast */
     --card-foreground: 210 40% 98%;
-    --popover: 223 47% 14%;
+    --popover: 223 47% 15%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
+    --primary: 217 91% 65%; /* Brighter primary for better visibility */
     --primary-foreground: 0 0% 100%;
-    --secondary: 217 33% 17%;
+    --secondary: 217 33% 20%; /* Adjusted for better contrast */
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 16% 70%;
-    --accent: 217 33% 17%;
+    --muted: 217 33% 20%;
+    --muted-foreground: 215 16% 80%; /* Brighter muted foreground */
+    --accent: 217 33% 20%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 62% 30%;
+    --destructive: 0 62% 40%; /* Brighter destructive for dark mode */
     --destructive-foreground: 210 40% 98%;
-    --border: 217 19% 27%;
-    --input: 217 19% 27%;
-    --ring: 224 76.3% 48%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 329 86% 70%;
-    --chart-3: 150 84% 60%;
-    --chart-4: 43 96% 58%;
-    --chart-5: 280 87% 72%;
-    --radius: 0.5rem;
+    --border: 220 13% 69%; /* Gray-400 equivalent for better visibility in dark mode */
+    --input: 220 13% 69%;
+    --ring: 224 76.3% 55%; /* Brighter ring color */
+    --chart-1: 217 91% 65%;
+    --chart-2: 329 86% 75%;
+    --chart-3: 150 84% 65%;
+    --chart-4: 43 96% 65%;
+    --chart-5: 280 87% 75%;
+    --radius: 0.4rem;
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 217 91% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent: 217 33% 20%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 224 76% 48%;
+    --sidebar-border: 220 13% 69%; /* Gray-400 equivalent for sidebar border */
+    --sidebar-ring: 224 76% 55%;
 
-    /* Scroll bar colors for dark mode */
-    --scrollbar-thumb: 217 33% 27%;
-    --scrollbar-track: 223 47% 16%;
+    /* Improved scroll bar colors for dark mode */
+    --scrollbar-thumb: 217 33% 35%;
+    --scrollbar-track: 223 47% 18%;
+
+    /* Shadow variables for dark mode */
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 6px 10px -1px rgba(0, 0, 0, 0.3),
+      0 2px 6px -2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
+      0 4px 6px -4px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -107,9 +123,9 @@
   }
 }
 
-/* Custom scrollbar styles */
+/* Enhanced scrollbar styles */
 @layer utilities {
-  /* Custom scrollbar for webkit browsers */
+  /* Custom scrollbar for webkit browsers with better visibility */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -126,7 +142,7 @@
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--primary) / 0.5);
+    background: hsl(var(--primary) / 0.6);
   }
 
   /* Firefox scrollbar customization */
@@ -160,16 +176,35 @@
     background: hsl(var(--background) / 0.6);
     border-radius: var(--radius);
   }
+
+  /* Enhanced focus rings for light mode */
+  :root:not(.dark) .focus-visible:focus-visible {
+    @apply ring-2 ring-primary/90 ring-offset-2 ring-offset-background;
+    outline: none;
+  }
 }
 
 /* Improved card and container shadows */
 @layer components {
-  .card {
-    @apply bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow;
+  /* Light mode specific card enhancements */
+  :root:not(.dark) .card {
+    @apply bg-card text-card-foreground shadow-md border border-border;
+    border-width: 1.5px;
   }
 
+  /* Dark mode card styling */
+  .dark .card {
+    @apply bg-card text-card-foreground shadow-sm border border-border/70;
+  }
+
+  /* Card hover effects for light mode */
+  :root:not(.dark) .card:hover {
+    @apply border-primary/90 shadow-md;
+  }
+
+  /* Card active state */
   .card.active {
-    @apply shadow-md border-primary/30;
+    @apply shadow-md border-primary/90;
   }
 
   /* Language-specific adaptations */
@@ -184,11 +219,78 @@
   }
 
   /* Improve button contrast */
-  .btn-primary {
-    @apply bg-primary text-primary-foreground hover:bg-primary/90 font-medium;
+  :root:not(.dark) .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 font-medium shadow-sm;
   }
 
-  .btn-secondary {
-    @apply bg-secondary text-secondary-foreground hover:bg-secondary/90 font-medium;
+  :root:not(.dark) .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/90 font-medium shadow-sm;
+  }
+
+  :root:not(.dark) .btn-primary:hover,
+  :root:not(.dark) .btn-secondary:hover {
+    @apply shadow-md;
+  }
+
+  /* Enhanced table styles for better line visibility in light mode */
+  :root:not(.dark) .table {
+    @apply border border-border;
+    border-width: 1.5px;
+  }
+
+  :root:not(.dark) .table th {
+    @apply border-b-2 border-border bg-muted/70 font-medium;
+  }
+
+  :root:not(.dark) .table td {
+    @apply border-b border-border/60;
+  }
+
+  :root:not(.dark) .table-row-hover {
+    @apply hover:bg-accent/70 transition-colors;
+  }
+
+  /* Improved border styles for light mode */
+  :root:not(.dark) .border-enhanced {
+    @apply border-border border;
+    border-width: 1.5px;
+  }
+
+  /* Input fields for light mode */
+  :root:not(.dark) input,
+  :root:not(.dark) select,
+  :root:not(.dark) textarea {
+    @apply border-border shadow-sm;
+    border-width: 1.5px;
+  }
+
+  :root:not(.dark) input:focus,
+  :root:not(.dark) select:focus,
+  :root:not(.dark) textarea:focus {
+    @apply border-primary/90 ring-1 ring-primary/20;
+  }
+
+  /* Popover and dropdown styles for light mode */
+  :root:not(.dark) .popover {
+    @apply bg-card border-border shadow-lg;
+    border-width: 1.5px;
+  }
+
+  /* Navigation elements for light mode */
+  :root:not(.dark) .nav-item {
+    @apply hover:bg-accent/80 rounded-md;
+  }
+
+  :root:not(.dark) .nav-item.active {
+    @apply bg-accent border-l-4 border-primary font-medium;
+  }
+
+  /* Badge styling for light mode */
+  :root:not(.dark) .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border border-border/90;
+  }
+
+  :root:not(.dark) .badge-primary {
+    @apply bg-primary/10 text-primary-foreground border-primary/30;
   }
 }
