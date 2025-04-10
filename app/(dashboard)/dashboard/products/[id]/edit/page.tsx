@@ -392,7 +392,7 @@ export default function EditProductPage() {
     }
   };
 
-  // Handle size variant additional image removal
+  // 1. First, fix the handleSizeVariantAdditionalImageRemove function:
   const handleSizeVariantAdditionalImageRemove = (
     variantIndex: number,
     imageIndex: number
@@ -411,6 +411,7 @@ export default function EditProductPage() {
       );
     }
 
+    // Remove the image from the additionalImages array
     updatedVariants[variantIndex].additionalImages = updatedVariants[
       variantIndex
     ].additionalImages.filter((_, i) => i !== imageIndex);
@@ -532,7 +533,8 @@ export default function EditProductPage() {
     }
   };
 
-  // Submit handler with proper discount validation
+  // 2. Then fix the onSubmit function to properly handle existing size variants
+  // This is the main part that needs to be fixed
   const onSubmit = async (values: FormValues) => {
     try {
       setIsLoading(true);
@@ -619,14 +621,6 @@ export default function EditProductPage() {
         toast.error("Failed to update product");
         setIsLoading(false);
         return;
-      }
-
-      // Remove all existing sizes
-      const existingProduct = await getProductByIdService(Number(params.id));
-      if (existingProduct?.sizes && existingProduct.sizes.length > 0) {
-        for (const size of existingProduct.sizes) {
-          await removeProductSizeService(Number(params.id), size.id);
-        }
       }
 
       // Handle image updates separately using dedicated endpoints
@@ -717,57 +711,64 @@ export default function EditProductPage() {
           }
         }
 
-        // Tracking added size variant IDs
-        const addedSizeVariantIds: number[] = [];
+        // *** THE FIX: Instead of removing all existing sizes and recreating them,
+        // distinguish between existing and new size variants ***
 
-        // Prepare an array of size data
-        const sizesData: SizeUpdateModel[] = sizeVariants.map((variant) => ({
-          size: variant.size,
-          price: variant.price,
-          status: variant.status,
-          ...(variant.discountType &&
-          variant.discountType !== "NONE" &&
-          variant.discountValue !== null
-            ? {
-                discountType: variant.discountType,
-                discountValue: variant.discountValue,
-                ...(variant.discountStartDate && variant.discountEndDate
-                  ? {
-                      discountStartDate: variant.discountStartDate,
-                      discountEndDate: variant.discountEndDate,
-                    }
-                  : {}),
-              }
-            : {}),
-        }));
-
-        // Create new sizes
-        const sizeResponse = await addProductSizeService(
-          Number(params.id),
-          sizesData
+        // Get existing product data
+        const existingProduct = await getProductByIdService(Number(params.id));
+        const existingSizeIds = new Set(
+          existingProduct?.sizes
+            ? existingProduct.sizes.map((s: { id: number }) => s.id)
+            : []
         );
 
-        // Process each added size variant
-        const addedSizes = sizeResponse?.data?.sizes || [];
+        // Separate size variants into new and existing ones
+        const newSizeVariants = sizeVariants.filter(
+          (v) => !v.id || !existingSizeIds.has(v.id)
+        );
+        const existingSizeVariants = sizeVariants.filter(
+          (v) => v.id && existingSizeIds.has(v.id)
+        );
 
-        for (let i = 0; i < addedSizes.length; i++) {
-          const newVariantId = addedSizes[i].id;
-          const variant = sizeVariants[i];
+        // Update existing size variants
+        for (const variant of existingSizeVariants) {
+          // Skip variants without ID (shouldn't happen, but just in case)
+          if (!variant.id) continue;
 
-          if (!newVariantId) {
-            console.error("Failed to get new size variant ID", sizeResponse);
-            toast.error(`Failed to add size variant: ${variant.size}`);
-            continue;
+          // Prepare size data
+          const sizeData: SizeUpdateModel = {
+            size: variant.size,
+            price: variant.price,
+            status: variant.status,
+          };
+
+          // Add discount fields if applicable
+          if (
+            variant.discountType &&
+            variant.discountType !== "NONE" &&
+            variant.discountValue !== null
+          ) {
+            sizeData.discountType = variant.discountType;
+            sizeData.discountValue = variant.discountValue;
+
+            if (variant.discountStartDate && variant.discountEndDate) {
+              sizeData.discountStartDate = variant.discountStartDate;
+              sizeData.discountEndDate = variant.discountEndDate;
+            }
           }
 
-          // Track the added size variant ID
-          addedSizeVariantIds.push(newVariantId);
+          // Update the size
+          await updateProductSizeService(
+            Number(params.id),
+            variant.id,
+            sizeData
+          );
 
-          // Update size main image if it exists
+          // Update main image if changed
           if (variant.mainImage?.base64Image) {
             await updateProductSizeMainImageService(
               Number(params.id),
-              newVariantId,
+              variant.id,
               {
                 base64Image: variant.mainImage.base64Image,
                 imageType: variant.mainImage.imageType || "jpeg",
@@ -775,26 +776,132 @@ export default function EditProductPage() {
             );
           }
 
-          // Add new additional images for the size
+          // Add new additional images
           const newSizeAdditionalImages = variant.additionalImages.filter(
             (img) => img.base64Image
           );
+
           if (newSizeAdditionalImages.length > 0) {
             const imagesData = newSizeAdditionalImages.map((img) => ({
               base64Image: img.base64Image || "",
               imageType: img.imageType || "jpeg",
             }));
+
             await addProductSizeAdditionalImagesService(
               Number(params.id),
-              newVariantId,
+              variant.id,
               imagesData
             );
           }
+
+          // Handle removed additional images
+          if (
+            variant.removedAdditionalImageIds &&
+            variant.removedAdditionalImageIds.length > 0
+          ) {
+            for (const imageId of variant.removedAdditionalImageIds) {
+              await removeProductSizeAdditionalImageService(
+                Number(params.id),
+                variant.id,
+                imageId
+              );
+            }
+          }
         }
 
-        // If additional size operations are needed and weren't handled in the initial
-        // service call, you can add them here using addedSizeVariantIds
-        console.log("Added Size Variant IDs:", addedSizeVariantIds);
+        // Create new size variants (if any)
+        if (newSizeVariants.length > 0) {
+          // Prepare an array of size data for new variants
+          const newSizesData: SizeUpdateModel[] = newSizeVariants.map(
+            (variant) => ({
+              size: variant.size,
+              price: variant.price,
+              status: variant.status,
+              ...(variant.discountType &&
+              variant.discountType !== "NONE" &&
+              variant.discountValue !== null
+                ? {
+                    discountType: variant.discountType,
+                    discountValue: variant.discountValue,
+                    ...(variant.discountStartDate && variant.discountEndDate
+                      ? {
+                          discountStartDate: variant.discountStartDate,
+                          discountEndDate: variant.discountEndDate,
+                        }
+                      : {}),
+                  }
+                : {}),
+            })
+          );
+
+          // Create new sizes
+          const sizeResponse = await addProductSizeService(
+            Number(params.id),
+            newSizesData
+          );
+
+          // Process each added size variant
+          const addedSizes = sizeResponse?.data?.sizes || [];
+
+          for (
+            let i = 0;
+            i < addedSizes.length && i < newSizeVariants.length;
+            i++
+          ) {
+            const newVariantId = addedSizes[i].id;
+            const variant = newSizeVariants[i];
+
+            if (!newVariantId) {
+              console.error("Failed to get new size variant ID", sizeResponse);
+              toast.error(`Failed to add size variant: ${variant.size}`);
+              continue;
+            }
+
+            // Update size main image if it exists
+            if (variant.mainImage?.base64Image) {
+              await updateProductSizeMainImageService(
+                Number(params.id),
+                newVariantId,
+                {
+                  base64Image: variant.mainImage.base64Image,
+                  imageType: variant.mainImage.imageType || "jpeg",
+                }
+              );
+            }
+
+            // Add new additional images for the size
+            const newSizeAdditionalImages = variant.additionalImages.filter(
+              (img) => img.base64Image
+            );
+
+            if (newSizeAdditionalImages.length > 0) {
+              const imagesData = newSizeAdditionalImages.map((img) => ({
+                base64Image: img.base64Image || "",
+                imageType: img.imageType || "jpeg",
+              }));
+
+              await addProductSizeAdditionalImagesService(
+                Number(params.id),
+                newVariantId,
+                imagesData
+              );
+            }
+          }
+        }
+
+        // Find IDs of sizes that were removed in the UI
+        const currentSizeIds = new Set(
+          sizeVariants.filter((v) => v.id).map((v) => v.id)
+        );
+        const sizesToRemove =
+          existingProduct?.sizes?.filter(
+            (s: { id: number }) => !currentSizeIds.has(s.id)
+          ) || [];
+
+        // Remove sizes that no longer exist in the UI
+        for (const sizeToRemove of sizesToRemove) {
+          await removeProductSizeService(Number(params.id), sizeToRemove.id);
+        }
       }
 
       toast.success("Product updated successfully");
